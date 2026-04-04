@@ -1,0 +1,6 @@
+# spec-kit / Claude Code — may contain credentials or session data
+.claude/settings.local.json
+.claude/mcp.json
+
+# OS
+.DS_Store
