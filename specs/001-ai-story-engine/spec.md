@@ -122,7 +122,8 @@ deliver value on their own, but the video file is the end product.
 **Independent Test**: Can be tested by providing a pre-approved scenario with
 selected media files and music, triggering generation, and verifying: a video
 file is produced at the expected path, contains all selected media in the correct
-order, the audio track is present if specified, and captions appear for each scene.
+order, the audio track is present if specified, and no text overlays appear unless
+the user explicitly requested them.
 
 **Acceptance Scenarios**:
 
@@ -145,6 +146,10 @@ order, the audio track is present if specified, and captions appear for each sce
 - What happens when a referenced photo file no longer exists on the RAID at
   generation time? System reports missing files before generation and asks the
   user to proceed without them or cancel.
+- What happens if video generation fails mid-assembly? System retries
+  automatically up to 3 times from scratch, logging each failure with the
+  error reason. After 3 failed attempts it reports failure to the user with
+  the log location.
 - How does the system handle very large requests ("make a video of all of 2024"
   with 3,000 photos)? System caps selection at 60 items and informs the user,
   suggesting sub-events instead.
@@ -168,21 +173,27 @@ order, the audio track is present if specified, and captions appear for each sce
   caption per item, an event title, and a narrative summary.
 - **FR-004**: System MUST support iterative refinement of a scenario through
   conversation (add/remove items, change tone, adjust length) before generation.
-- **FR-005**: System MUST suggest at least 2 music options with mood descriptions
-  when transitioning to music selection.
+- **FR-005**: System MUST suggest at least 2 music options from a bundled set of
+  10-20 mood-categorized royalty-free tracks, matched to the story's tone. User
+  MUST always be able to substitute their own audio file instead.
 - **FR-006**: System MUST accept a user-supplied audio file as an alternative to
   suggested music, or allow music to be skipped entirely.
 - **FR-007**: System MUST generate a video file from an approved scenario,
-  assembling media in order with transitions, text overlays, and the selected
-  audio track.
+  assembling media in order with transitions and the selected audio track.
+  Burned-in text overlays (captions/narrative) MUST be included only when
+  the user explicitly requests them; by default the video is clean (no text).
 - **FR-008**: System MUST report generation progress during video assembly.
 - **FR-009**: All photo and video content MUST remain on the local network;
   only non-sensitive metadata (captions, event names, descriptions) may be sent
   to external AI services.
 - **FR-010**: System MUST handle unavailable content gracefully — missing files,
   unreachable dependencies, unsupported formats — with clear user-facing messages.
-- **FR-011**: A scenario MUST be persisted so the user can resume a session
-  without losing their approved selections.
+- **FR-012**: System MUST log all generation attempts, failures, and error reasons
+  to a persistent log file on the RAID. Automatic retry MUST be limited to 3
+  attempts before surfacing failure to the user.
+- **FR-011**: A scenario MUST be persisted as a JSON/YAML file on the RAID so
+  the user can resume a session without losing approved selections. No database
+  is required.
 
 ### Key Entities
 
@@ -197,6 +208,20 @@ order, the audio track is present if specified, and captions appear for each sce
   user-supplied file path. Can be explicitly "none".
 - **Generated Video**: Output artifact — file path, duration, size, and a
   reference back to the scenario it was generated from.
+- **Scenario Store**: A directory on the RAID containing one JSON/YAML file per
+  scenario. Each file captures the full scenario state (selected media, captions,
+  narrative, music selection, approval status) so sessions can be resumed without
+  loss. No database required.
+
+## Clarifications
+
+### Session 2026-04-04
+
+- Q: Where are scenarios persisted? → A: File per scenario on RAID (JSON/YAML) — no extra dependencies.
+- Q: How are captions/text included in the video? → A: Burned-in text overlays, only when explicitly requested by the user; default output is clean video with no text.
+- Q: Multi-scenario management? → A: One active scenario at a time; past generated videos are listable by asking — no parallel scenarios needed.
+- Q: Generation failure recovery? → A: Restart from scratch (no resume), log failures, retry automatically up to a fixed limit before reporting failure to the user.
+- Q: Music catalog scope? → A: Small curated set of 10-20 royalty-free tracks organized by mood category; user can always provide their own audio file as an alternative.
 
 ## Success Criteria *(mandatory)*
 
@@ -222,11 +247,16 @@ order, the audio track is present if specified, and captions appear for each sce
   already enabled — this is a prerequisite, not in scope for this feature.
 - ImmichMCP or equivalent Immich API access is available for the Story Engine to
   query; setting that up is outside this feature's scope.
-- Music suggestions are based on pre-curated royalty-free tracks bundled with the
-  system; licensing for user-supplied music is the user's responsibility.
+- Music suggestions are drawn from a bundled set of 10-20 royalty-free tracks
+  organized by mood category (e.g., upbeat, calm, sentimental, fun). The user
+  can always bypass suggestions by providing their own audio file path; licensing
+  for user-supplied music is the user's responsibility.
 - Video output is MP4 format — the most universally compatible for home playback.
 - The primary interaction surface is conversational AI; no standalone GUI is
   required for v1.
 - A scenario contains a maximum of 60 media items to keep generation times
   predictable; larger events should be broken into sub-stories.
 - The system has a single user — no multi-user access control needed in v1.
+- Only one scenario is active at a time. Starting a new story request replaces
+  the current draft. Past generated videos remain on disk and are listable on
+  request; no separate history database is needed.
