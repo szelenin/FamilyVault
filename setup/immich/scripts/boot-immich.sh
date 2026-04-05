@@ -27,4 +27,7 @@ cd "$SCRIPT_DIR/.."
 
 # Wait for container to get its OrbStack IP, then start TCP proxy
 sleep 10
-nohup python3 "$SCRIPT_DIR/tcp-proxy.py" >> /tmp/immich-proxy.log 2>&1 &
+# Kill any stale proxy from a previous run
+pkill -f "tcp-proxy.py" 2>/dev/null || true
+PYTHON3=$(command -v python3 || echo /usr/bin/python3)
+nohup "$PYTHON3" "$SCRIPT_DIR/tcp-proxy.py" >> /tmp/immich-proxy.log 2>&1 &
