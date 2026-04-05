@@ -8,6 +8,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 DOCKER=$(command -v docker || echo /usr/local/bin/docker)
 
+# Launch OrbStack if not already running
+if ! "$DOCKER" info >/dev/null 2>&1; then
+    echo "Starting OrbStack..."
+    open -a OrbStack
+fi
+
 # Wait for OrbStack Docker daemon to be ready
 DOCKER_TIMEOUT=${DOCKER_TIMEOUT:-120}
 echo "Waiting for Docker daemon (timeout: ${DOCKER_TIMEOUT}s)..."
