@@ -274,21 +274,27 @@ ssh macmini.local "for i in \$(seq 1 24); do /usr/local/bin/docker ps --format '
 
 ### Step 4.4 — Start TCP proxy (LAN access)
 
+OrbStack only binds ports to localhost, not the LAN. The TCP proxy forwards `0.0.0.0:2283` to the Immich container. It resolves the container's current OrbStack IP automatically via DNS (`immich-immich-server-1.orb.local`) — no hardcoded IPs.
+
 **[AGENT]**
 ```bash
 ssh macmini.local "
-CONTAINER_IP=\$(/usr/local/bin/docker inspect immich-immich-server-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
-ORB_IP=\$(python3 -c \"import socket; print(socket.gethostbyname('immich-immich-server-1.orb.local'))\")
-pkill -f tcp-proxy.py 2>/dev/null; sleep 1
-nohup python3 /Users/szelenin/projects/takeout/takeout/setup/immich/scripts/tcp-proxy.py > /tmp/immich-proxy.log 2>&1 &
-echo \$!"
+kill \$(pgrep -f 'python3.*tcp-proxy') 2>/dev/null || true
+sleep 1
+/usr/bin/python3 /Users/szelenin/projects/takeout/takeout/setup/immich/scripts/tcp-proxy.py > /tmp/immich-proxy.log 2>&1 &
+disown
+sleep 3
+cat /tmp/immich-proxy.log"
 ```
+**Expected**: `Immich proxy: 0.0.0.0:2283 -> 192.168.138.x:80 (resolved from immich-immich-server-1.orb.local)`
 
 **Verify**:
 ```bash
 ssh macmini.local "curl -sf http://127.0.0.1:2283/api/server/ping"
 ```
 **Expected**: `{"res":"pong"}`
+
+**On failure**: Check that the Immich server container is healthy: `ssh macmini.local "/usr/local/bin/docker ps | grep immich-server"`
 
 ### Step 4.5 — Provision admin account and API key
 
@@ -338,6 +344,8 @@ echo \"registered: \$LIB_ID\""
 
 ### Step 4.7 — Install launchd boot agent
 
+The launchd agent runs `boot-immich.sh` at login, which: (1) waits for RAID mount, (2) waits for OrbStack's Docker daemon (up to 120s), (3) runs `docker compose up -d`, (4) waits 10s, then (5) execs the TCP proxy in the foreground. The agent has `KeepAlive=true`, so launchd restarts it if it crashes.
+
 **[AGENT]**
 ```bash
 ssh macmini.local "
@@ -345,9 +353,18 @@ PLIST=~/Library/LaunchAgents/com.familyvault.immich.plist
 cp /Users/szelenin/projects/takeout/takeout/setup/immich/launchd/com.familyvault.immich.plist \"\$PLIST\"
 launchctl unload \"\$PLIST\" 2>/dev/null || true
 launchctl load \"\$PLIST\"
+sleep 30
 launchctl list | grep familyvault"
 ```
-**Expected**: line containing `com.familyvault.immich`
+**Expected**: line like `9081  -  com.familyvault.immich` (PID present, no error code)
+
+**Verify** (after 30s):
+```bash
+ssh macmini.local "curl -sf http://127.0.0.1:2283/api/server/ping"
+```
+**Expected**: `{"res":"pong"}`
+
+**On failure**: Check boot log: `ssh macmini.local "cat /tmp/familyvault-immich.log; cat /tmp/familyvault-immich-error.log"`
 
 **[USER]** Ask: *"Please open http://macmini.local:2283 in your browser. You should see the Immich login screen. Log in with email `admin@familyvault.local` and password `FamilyVault2026!`. Tell me what you see."*
 
