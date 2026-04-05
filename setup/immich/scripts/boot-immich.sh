@@ -25,9 +25,8 @@ echo "Docker daemon ready"
 cd "$SCRIPT_DIR/.."
 "$DOCKER" compose up -d
 
-# Wait for container to get its OrbStack IP, then start TCP proxy
+# Wait for container to get its OrbStack IP, then run TCP proxy in foreground.
+# Running in foreground keeps launchd from killing it when this script exits.
 sleep 10
-# Kill any stale proxy from a previous run
-pkill -f "tcp-proxy.py" 2>/dev/null || true
 PYTHON3=$(command -v python3 || echo /usr/bin/python3)
-nohup "$PYTHON3" "$SCRIPT_DIR/tcp-proxy.py" >> /tmp/immich-proxy.log 2>&1 &
+exec "$PYTHON3" "$SCRIPT_DIR/tcp-proxy.py"

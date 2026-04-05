@@ -21,6 +21,6 @@
     <string>/tmp/familyvault-immich-error.log</string>
 
     <key>KeepAlive</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
