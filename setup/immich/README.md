@@ -69,9 +69,9 @@ cat /tmp/familyvault-immich-error.log
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Log ends at "Waiting for Docker daemon" | OrbStack didn't start (not in LaunchAgents) | Open OrbStack.app manually; ensure it's set to launch at login |
+| Log ends at "Waiting for Docker daemon" after 120s | OrbStack VM took too long to initialize | `launchctl kickstart -k gui/$(id -u)/com.familyvault.immich` — boot script now runs `open -a OrbStack` before waiting |
 | `docker compose up` error in error log | Docker socket exists but OrbStack VM not ready | Wait 30s and re-run `launchctl kickstart -k gui/$(id -u)/com.familyvault.immich` |
-| Proxy log shows wrong IP (empty replies) | OrbStack assigned new IP, old proxy running | `kill $(pgrep -f tcp-proxy); launchctl kickstart -k gui/$(id -u)/com.familyvault.immich` |
+| Proxy log shows wrong IP (empty replies) | OrbStack assigned new IP, old proxy running | `launchctl kickstart -k gui/$(id -u)/com.familyvault.immich` — proxy re-resolves IP on each start |
 | `launchctl list` shows error code `-` | Job not running | Check error log; re-run kickstart |
 
 **Restarting manually**:
