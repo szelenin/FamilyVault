@@ -12,7 +12,7 @@
 
 **Purpose**: Project structure, dependencies, configuration.
 
-- [ ] T001 Create directory structure: `setup/story-engine/scripts/`, `setup/story-engine/music/{upbeat,calm,sentimental}/`, `tests/story-engine/unit/`, `tests/story-engine/integration/`
+- [ ] T001 Create directory structure: `setup/story-engine/scripts/`, `setup/story-engine/music/{upbeat,calm,sentimental}/`, `tests/story-engine/unit/`, `tests/story-engine/integration/`, `tests/story-engine/e2e/`
 - [ ] T002 Create `setup/story-engine/config.sh` with env var defaults: `IMMICH_URL`, `IMMICH_API_KEY_FILE`, `STORIES_DIR`, `FFMPEG_BIN`, `IMAGE_DURATION`, `FADE_DURATION`, `OUTPUT_RESOLUTION`, `TRANSITION`
 - [ ] T003 Verify FFmpeg on Mac Mini: `ssh macmini "brew list ffmpeg || brew install ffmpeg"` and confirm `ffmpeg -version`
 - [ ] T004 Create stories directory: `ssh macmini "mkdir -p /Volumes/HomeRAID/stories"`
@@ -71,7 +71,7 @@
 
 **Independent test**: `manage-scenario.py set-music` commands pass for all three types (bundled/user/none) and validate file existence.
 
-- [ ] T024 [US3] Add 6 royalty-free MP3 tracks (2 per mood) to `setup/story-engine/music/`: `upbeat/track1.mp3`, `upbeat/track2.mp3`, `calm/track1.mp3`, `calm/track2.mp3`, `sentimental/track1.mp3`, `sentimental/track2.mp3` — source from Pixabay Music (CC0)
+- [ ] T024 [US3] Add 12 royalty-free MP3 tracks (4 per mood) to `setup/story-engine/music/`: `upbeat/track{1..4}.mp3`, `calm/track{1..4}.mp3`, `sentimental/track{1..4}.mp3` — source from Pixabay Music (CC0); satisfies FR-005 requirement of 10–20 bundled tracks
 - [ ] T025 [US3] Write failing unit tests: `test_set_music_bundled_sets_path`, `test_set_music_user_validates_file_exists`, `test_set_music_user_rejects_missing_file`, `test_set_music_none_sets_type_none`, `test_list_bundled_tracks_by_mood`
 - [ ] T026 [US3] Confirm T025 tests fail: `python3 -m pytest tests/story-engine/unit/test_scenario.py::test_set_music* -x`
 - [ ] T027 [US3] Implement `manage-scenario.py set-music` command (bundled/user/none types, file existence validation) and `list-music` command (table of bundled tracks by mood)
@@ -104,9 +104,12 @@
 
 **Purpose**: End-to-end test, documentation, INSTALL.md update.
 
-- [ ] T041 Write big test in `tests/story-engine/integration/test_immich_api.py`: `test_full_story_flow` — search → create scenario → add 3 items → set music → approve → assemble (requires live Immich + FFmpeg on Mac Mini)
+- [ ] T041 Write big (e2e) test in `tests/story-engine/e2e/test_full_story_flow.py`: `test_full_story_flow` — search → create scenario → add 3 items → set music → approve → assemble → assert output is valid MP4 via `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name` returns `h264` (requires live Immich + FFmpeg on Mac Mini)
 - [ ] T042 [P] Create `setup/story-engine/README.md`: overview, prerequisites, installation, usage, configuration reference
 - [ ] T043 [P] Update `INSTALL.md` Phase 4 with Story Engine setup steps (FFmpeg install, stories dir, SKILL.md location)
+- [ ] T044 [P] Write benchmark test in `tests/story-engine/integration/test_performance.py`: `test_scenario_generation_under_30s` — time full search + scenario create against live Immich 15K-item library; assert elapsed < 30s (SC-001)
+- [ ] T045 [P] Write benchmark test in `tests/story-engine/integration/test_performance.py`: `test_video_assembly_under_5min` — time `assemble-video.py` for a 30-item approved scenario; assert elapsed < 300s (SC-003)
+- [ ] T046 [P] Write unit test in `tests/story-engine/unit/test_assembly.py`: `test_no_external_requests` — mock `requests.get` and assert `assemble-video.py` only calls URLs matching `IMMICH_URL`; no calls to any external host (FR-009)
 
 ---
 
@@ -136,7 +139,7 @@ Within Phase 6:
 - T030/T031 (FFmpeg math tests) and T032/T033 (HEIC/precondition tests) can run in parallel before T034
 
 Within Phase 7:
-- T042 (README) and T043 (INSTALL.md) are fully independent [P]
+- T042 (README), T043 (INSTALL.md), T044 (SC-001 benchmark), T045 (SC-003 benchmark), T046 (FR-009 privacy test) are all fully independent [P]
 
 ---
 

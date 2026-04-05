@@ -187,13 +187,14 @@ the user explicitly requested them.
   only non-sensitive metadata (captions, event names, descriptions) may be sent
   to external AI services.
 - **FR-010**: System MUST handle unavailable content gracefully — missing files,
-  unreachable dependencies, unsupported formats — with clear user-facing messages.
+  unreachable dependencies, unsupported formats — with a human-readable stderr
+  message naming the unavailable resource and exit code 3.
+- **FR-011**: A scenario MUST be persisted as a JSON file on the RAID so
+  the user can resume a session without losing approved selections. No database
+  is required.
 - **FR-012**: System MUST log all generation attempts, failures, and error reasons
   to a persistent log file on the RAID. Automatic retry MUST be limited to 3
   attempts before surfacing failure to the user.
-- **FR-011**: A scenario MUST be persisted as a JSON/YAML file on the RAID so
-  the user can resume a session without losing approved selections. No database
-  is required.
 
 ### Key Entities
 
