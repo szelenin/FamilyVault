@@ -128,6 +128,13 @@ generated and can be assigned names.
   by natural language description.
 - **FR-008**: Immich MUST expose its REST API at `http://macmini.local:2283/api`
   for use by the AI Story Engine and ImmichMCP.
+- **FR-010**: Setup MUST provision an Immich API key and store it at
+  `/Volumes/HomeRAID/immich/api-key.txt` so dependent services (AI Story Engine,
+  ImmichMCP) can locate it at a known path without manual configuration.
+- **FR-011**: A boot-time mechanism MUST delay Docker Compose start until
+  `/Volumes/HomeRAID` is confirmed mounted. If the RAID is unavailable after a
+  60-second timeout, the mechanism MUST log a clear error and abort the Docker
+  start rather than launching containers against a missing volume.
 - **FR-009**: Setup MUST be repeatable and documented — running the setup process
   again on a clean Mac Mini MUST produce the same result.
 
@@ -160,6 +167,13 @@ generated and can be assigned names.
   500ms under normal operating conditions.
 - **SC-006**: New files added to icloud-export appear in Immich within 24 hours
   without manual intervention.
+
+## Clarifications
+
+### Session 2026-04-04
+
+- Q: Does FR-008 API access require authentication credentials provisioned as part of setup? → A: Setup MUST provision an Immich API key and store it at a known path on the RAID for use by dependent services.
+- Q: Should the RAID mount ordering assumption be elevated to a functional requirement? → A: A boot-time mechanism MUST delay Docker Compose start until RAID is confirmed mounted, logging a clear error and aborting if unavailable after timeout.
 
 ## Assumptions
 

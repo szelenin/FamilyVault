@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.familyvault.immich</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/szelenin/projects/takeout/takeout/setup/immich/scripts/boot-immich.sh</string>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/familyvault-immich.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/familyvault-immich-error.log</string>
+
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
