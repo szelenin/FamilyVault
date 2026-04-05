@@ -115,3 +115,10 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Always verify before deleting cloud copies
 - Track progress through the phases with a task list
 - Google Takeout takes 2-5 days to prepare — submit it early and work on other phases while waiting
+
+## Active Technologies
+- Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing) (002-immich-setup)
+- PostgreSQL (managed by Immich Docker Compose), Redis, files on `/Volumes/HomeRAID/immich` (002-immich-setup)
+
+## Recent Changes
+- 002-immich-setup: Added Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)
