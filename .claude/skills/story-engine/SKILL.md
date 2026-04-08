@@ -1,171 +1,153 @@
-# Story Engine Skill
+# Story Engine Skill (v2)
 
-You help the user create, refine, and generate family video stories from their Immich photo library.
+You help the user create, refine, and generate family video stories from their Immich photo library using smart photo/video selection with quality scoring and deduplication.
 
 ## Environment
 
 - Scripts live at: `~/projects/takeout/takeout/setup/story-engine/scripts/`
 - All scripts run on Mac Mini via SSH: `ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/<script>.py ..."`
 - Config: `setup/story-engine/config.sh` (source before running, or set env vars)
-- Stories stored at: `/Volumes/HomeRAID/stories/{scenario-id}/scenario.json`
+- Projects stored at: `/Volumes/HomeRAID/stories/{project-id}/project.json`
 - FFmpeg: `/opt/homebrew/bin/ffmpeg`
+- Story Engine album in Immich: `b613c358-175e-4998-85db-cd968e74abf4`
 
-## US1 — Conversational Story Request
+## US1 — Smart Story Request
 
-**Trigger**: User describes a story in natural language (e.g., "make a clip of our Miami trip in March 2025").
+**Trigger**: User describes a story in natural language (e.g., "make a clip of our Miami trip. Speed boat, vizcaya garden, sunset must have").
 
 **Workflow**:
 
 1. **Parse the request** — extract from the user's message:
-   - Semantic query (e.g., "birthday party", "beach vacation")
-   - Person name if mentioned (e.g., "Edgar")
+   - Semantic queries (e.g., "miami trip", "beach vacation")
+   - Must-have keywords (e.g., "speed boat, vizcaya garden, sunset" — items after "must have")
+   - Person names if mentioned
    - Date range if mentioned (after/before as YYYY-MM-DD)
    - City or country if mentioned
 
-2. **Search Immich** via `search-photos.py`:
-   ```bash
-   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/search_photos.py \
-     --query 'birthday party' \
-     --person 'Edgar' \
-     --after 2025-03-01 --before 2025-03-31 \
-     --limit 30"
-   ```
-   - Exit 2 = no results → tell user clearly what was searched, suggest alternatives
-   - Exit 0 = results as JSON array
-
-3. **Select top N assets** — from the results JSON, pick the best 10–20 items based on:
-   - Variety of moments (not 10 near-identical shots)
-   - Key moments first (birthday cake, group shots, smiling faces)
-   - Chronological order by `taken_at`
-
-4. **Generate captions and narrative** — for each selected asset write a short caption (1 sentence). Write a 2–3 sentence narrative summary for the overall story.
-
-5. **Create the scenario** via `manage-scenario.py`:
-   ```bash
-   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/manage_scenario.py \
-     create --title 'Edgar Birthday Miami' --request 'birthday march 2025'"
-   ```
-   Save the returned `id`.
-
-6. **Add items** — for each selected asset (in order):
-   ```bash
-   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/manage_scenario.py \
-     add-item SCENARIO_ID \
-     --asset-id ASSET_UUID \
-     --caption 'Blowing out the candles'"
+2. **Create project**:
+   ```python
+   from scripts.manage_project import create_project
+   project = create_project(title="Miami Trip March 2026", request="original prompt",
+                            search_params={"queries": [...], "city": "Miami", ...},
+                            stories_dir="/Volumes/HomeRAID/stories")
    ```
 
-7. **Set narrative**:
-   ```bash
-   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/manage_scenario.py \
-     set-narrative SCENARIO_ID --text 'Edgar celebrated his 5th birthday...'"
+3. **Multi-query search** via `search_photos.py`:
+   ```python
+   from scripts.search_photos import make_session, search_multi, enrich_assets
+   session = make_session(immich_url, api_key_file)
+   assets = search_multi(session=session, immich_url=immich_url,
+                         queries=["miami trip", "speed boat", "vizcaya garden", "sunset"],
+                         city="Miami", after="2026-03-28", before="2026-04-02", limit=200)
+   enriched = enrich_assets(session, immich_url, assets)
    ```
 
-8. **Present to user** — show a table:
+4. **Score, dedup, select** via `score_and_select.py`:
+   ```python
+   from scripts.score_and_select import (
+       score_candidates, detect_bursts, detect_scenes,
+       allocate_budget, select_timeline, extract_must_have_keywords,
+       generate_caption
+   )
+   must_haves = extract_must_have_keywords(user_prompt)
+   scored = score_candidates(enriched, must_have_keywords=must_haves)
+   bursts = detect_bursts(scored)
+   scenes = detect_scenes(scored)
+   budget = allocate_budget(scenes, total_budget=10 + 5 * trip_days)
+   timeline = select_timeline(scored, bursts, scenes, budget, must_haves=must_have_assets)
    ```
-   Scenario: Edgar Birthday Miami (ID: 2025-03-15-edgar-birthday-miami)
-   State: draft | Items: 12 | Created: 2025-03-15
 
-   #  | Caption                        | Date       | File
-   ---|--------------------------------|------------|----------------------
-   1  | Blowing out the candles        | 2025-03-15 | birthday_cake.jpg
-   2  | Everyone at the party          | 2025-03-15 | birthday_party.heic
-   ...
-
-   Narrative: Edgar celebrated his 5th birthday at a Miami beach house...
-
-   Would you like to refine this scenario, select music, or generate the video?
+5. **Save to project**:
+   ```python
+   from scripts.manage_project import set_candidate_pool, set_timeline, set_state
+   set_candidate_pool(project_id, scored, stories_dir=stories_dir)
+   set_timeline(project_id, timeline, stories_dir=stories_dir)
+   set_state(project_id, "selecting", stories_dir=stories_dir)
+   set_state(project_id, "previewing", stories_dir=stories_dir)
    ```
+
+6. **Create preview album** and present to user:
+   ```python
+   from scripts.preview import create_preview_album
+   asset_ids = [item["asset_id"] for item in timeline]
+   preview = create_preview_album(session, immich_url, asset_ids, title="Preview: Miami Trip")
+   ```
+   Report to user as plain text (NO markdown wrapping on URLs):
+
+   Here's your selection (15 photos, 3 videos, ~90 seconds):
+   Preview album: http://macmini:2283/share/KEY
+
+   Scenes detected:
+   1. Airport arrival (2 items)
+   2. Speed boat tour (4 items, includes must-have)
+   3. Vizcaya Gardens (3 items, includes must-have)
+   4. Sunset at beach (2 items, includes must-have)
+   5. Dinner (2 items)
+   6. Hotel pool (2 items)
+
+   Say "generate" to create the video, or refine:
+   - "replace #3" — swap with an alternate
+   - "remove #7" — remove an item
+   - "more boat tour photos" — increase scene budget
+   - "make it shorter" — reduce total items
+   - "trim video #4 to first 5 seconds"
 
 **Edge cases**:
-- Zero results → tell user what was searched, suggest broader query or different date range
-- Vague request matches multiple events → show top 2–3 candidate sets and ask user to choose
-- >60 items available → select best 60 and mention the cap
+- Zero results → tell user what was searched, suggest broader query
+- Must-have keyword not found → warn user, try fuzzy variations
+- >60 items → budget cap enforced, mention the cap
 
 ---
 
 ## US2 — Scenario Review and Refinement
 
-**Trigger**: User asks to change the scenario (e.g., "remove airport photos", "make it funnier", "add pool photos", "max 10 photos").
+**Trigger**: User asks to change the selection (e.g., "replace #3", "remove airport photos", "more sunset").
 
 **Command mapping**:
 
-| User request | Script command |
+| User request | Action |
 |---|---|
-| "Remove item at position 3" | `remove-item SCENARIO_ID --position 3` |
-| "Remove airport photos" | Search for matching items by caption/filename, then `remove-item` for each |
-| "Add pool photos" | Run `search-photos.py --query 'pool'`, select best, `add-item` each |
-| "Move photo 5 to position 1" | `reorder SCENARIO_ID --order 5,1,2,3,4,...` |
-| "Make it funnier / more upbeat" | Rewrite captions and narrative, then `set-narrative` |
-| "Max 10 photos" | `remove-item` for positions 11+ keeping the best 10 |
+| "Replace #3" | Show 2-3 alternates from burst group, let user pick |
+| "Remove #7 and #8" | `remove_item(project_id, 7)`, `remove_item(project_id, 8)` |
+| "More boat tour photos" | `set_budget(project_id, overrides={"scene-002": 6})` then re-run `select_timeline` |
+| "Make it shorter" / "only 10 photos" | Reduce total budget, re-run selection |
+| "Move #5 to position 1" | `reorder_items(project_id, [5,1,2,3,4,...])` |
+| "Trim video #4 to first 5 seconds" | `trim_video(project_id, 4, 0.0, 5.0)` |
 
-**After each change**: Show the updated scenario table (re-run `show` to get current state).
-
----
-
-## US3 — Music Selection
-
-**Trigger**: User asks about music, or after scenario is reviewed.
-
-**Available moods**: upbeat, calm, sentimental (4 tracks each, CC0 royalty-free)
-
-**Workflow**:
-
-1. **Detect mood** from narrative (fun/energetic → upbeat, peaceful/nostalgic → calm/sentimental)
-2. **Suggest 2 tracks**:
-   ```
-   Based on your fun family birthday story, I suggest:
-   1. Upbeat / track1 — energetic acoustic, great for celebration montages
-   2. Upbeat / track2 — cheerful ukulele, light and playful
-
-   Or say "use my own file: /path/to/song.mp3" or "skip music".
-   ```
-3. **Set music** based on user choice:
-   ```bash
-   # Bundled:
-   ssh macmini "python3 .../manage_scenario.py set-music SCENARIO_ID --type bundled --mood upbeat --track track1"
-   # User file:
-   ssh macmini "python3 .../manage_scenario.py set-music SCENARIO_ID --type user --file /Music/song.mp3"
-   # Skip:
-   ssh macmini "python3 .../manage_scenario.py set-music SCENARIO_ID --type none"
-   ```
+**After each change**: Re-create preview album and show updated share link.
 
 ---
 
-## US4 — Video Generation
+## US3 — Video Generation
 
-**Trigger**: User says "generate", "make it", "go ahead", or similar.
+**Trigger**: User says "generate", "make it", "go ahead".
 
 **Workflow**:
 
 1. **Advance state to approved**:
-   ```bash
-   ssh macmini "python3 .../manage_scenario.py set-state SCENARIO_ID --state reviewed"
-   ssh macmini "python3 .../manage_scenario.py set-state SCENARIO_ID --state approved"
+   ```python
+   set_state(project_id, "approved", stories_dir=stories_dir)
    ```
 
-2. **Run assembly** (up to 3 retries on failure):
+2. **Run assembly** (the assembler reads the project file timeline):
    ```bash
-   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/assemble_video.py SCENARIO_ID --progress"
+   ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/assemble_video.py PROJECT_ID --progress"
    ```
 
-3. **Report progress** — relay FFmpeg progress lines to the user during assembly.
-
-4. **On success** — upload to Immich, add to the "Story Engine" album, and create a share link:
+3. **On success** — upload to Immich, add to Story Engine album, create share link:
 
    a. Upload the video:
    ```bash
    ssh macmini "curl -s -X POST http://localhost:2283/api/assets \
      -H 'x-api-key: $(cat /Volumes/HomeRAID/immich/api-key.txt)' \
-     -F 'assetData=@/Volumes/HomeRAID/stories/SCENARIO_ID/output.mp4' \
-     -F 'deviceAssetId=SCENARIO_ID' \
+     -F 'assetData=@/Volumes/HomeRAID/stories/PROJECT_ID/output.mp4' \
+     -F 'deviceAssetId=PROJECT_ID' \
      -F 'deviceId=story-engine' \
      -F 'fileCreatedAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
      -F 'fileModifiedAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
    ```
-   Save the returned `id` field as ASSET_ID.
 
-   b. Add to the "Story Engine" album (album ID: b613c358-175e-4998-85db-cd968e74abf4):
+   b. Add to Story Engine album (ID: b613c358-175e-4998-85db-cd968e74abf4):
    ```bash
    ssh macmini "curl -s -X PUT http://localhost:2283/api/albums/b613c358-175e-4998-85db-cd968e74abf4/assets \
      -H 'x-api-key: $(cat /Volumes/HomeRAID/immich/api-key.txt)' \
@@ -173,24 +155,28 @@ You help the user create, refine, and generate family video stories from their I
      -d '{\"ids\": [\"ASSET_ID\"]}'"
    ```
 
-   c. Create a share link (no expiry):
-   ```bash
-   ssh macmini "curl -s -X POST http://localhost:2283/api/shared-links \
-     -H 'x-api-key: $(cat /Volumes/HomeRAID/immich/api-key.txt)' \
-     -H 'Content-Type: application/json' \
-     -d '{\"type\": \"INDIVIDUAL\", \"assetIds\": [\"ASSET_ID\"], \"allowDownload\": true}'"
-   ```
-   Extract the `key` field from the response.
-
-   d. Report to user — output the share URL as plain text with NO markdown formatting (no bold, no backticks wrapping the URL):
+   c. Create share link and report:
 
    Video is ready. Find it in Immich under Albums > Story Engine, or open directly:
    http://macmini:2283/share/KEY
 
-   Duration: 52s | Size: 4.7 MB
+   Duration: 90s | Size: 45 MB | Quality: 1080p CRF 18
 
-   IMPORTANT: Always output the share URL as a bare URL on its own line. Never wrap it in ** or ` characters. The format must be exactly:
-   http://macmini:2283/share/KEY
-   with no surrounding markdown.
+   IMPORTANT: Always output the share URL as a bare URL on its own line. Never wrap it in ** or ` characters.
 
-5. **On failure** — show error from ffmpeg.log, retry automatically (max 3x), then surface failure with log path.
+4. **On failure** — show error, retry up to 3x, then surface failure with log path.
+
+---
+
+## Scoring Details
+
+**Photo weights**: faces (40%), content relevance (30%), timestamp diversity (20%), resolution (10%)
+**Video weights**: content relevance (40%), duration (25%, sweet spot 5-30s), diversity (20%), faces (15%)
+
+When a photo and video exist from the same moment (within 5 seconds), the video is the default primary pick but the photos are kept as alternates for user swaps.
+
+**Budget formula**: base 10 + 5 per day of trip, capped at 60 items. Distributed proportionally across scenes. User can override per-scene.
+
+**Diversity cap**: No more than 30% of selected items from any single scene.
+
+**Must-haves**: Extracted from prompt (e.g., "speed boat, vizcaya must have"), searched with multiple variations for typo tolerance, guaranteed slots in timeline.
