@@ -119,6 +119,8 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 ## Active Technologies
 - Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing) (002-immich-setup)
 - PostgreSQL (managed by Immich Docker Compose), Redis, files on `/Volumes/HomeRAID/immich` (002-immich-setup)
+- Python 3.13 (on Mac Mini) + Bash (Claude Code skills) + FFmpeg 7+ (Mac Mini, brew), Immich REST API v2.6.3, `sips` (built-in macOS), `pytest` 8+ (001-ai-story-engine)
+- Files on `/Volumes/HomeRAID/stories/` (configurable via `STORIES_DIR` env var) (001-ai-story-engine)
 
 ## Recent Changes
 - 002-immich-setup: Added Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)

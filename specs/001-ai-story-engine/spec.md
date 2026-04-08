@@ -187,13 +187,14 @@ the user explicitly requested them.
   only non-sensitive metadata (captions, event names, descriptions) may be sent
   to external AI services.
 - **FR-010**: System MUST handle unavailable content gracefully — missing files,
-  unreachable dependencies, unsupported formats — with clear user-facing messages.
+  unreachable dependencies, unsupported formats — with a human-readable stderr
+  message naming the unavailable resource and exit code 3.
+- **FR-011**: A scenario MUST be persisted as a JSON file on the RAID so
+  the user can resume a session without losing approved selections. No database
+  is required.
 - **FR-012**: System MUST log all generation attempts, failures, and error reasons
   to a persistent log file on the RAID. Automatic retry MUST be limited to 3
   attempts before surfacing failure to the user.
-- **FR-011**: A scenario MUST be persisted as a JSON/YAML file on the RAID so
-  the user can resume a session without losing approved selections. No database
-  is required.
 
 ### Key Entities
 
@@ -208,10 +209,7 @@ the user explicitly requested them.
   user-supplied file path. Can be explicitly "none".
 - **Generated Video**: Output artifact — file path, duration, size, and a
   reference back to the scenario it was generated from.
-- **Scenario Store**: A directory on the RAID containing one JSON/YAML file per
-  scenario. Each file captures the full scenario state (selected media, captions,
-  narrative, music selection, approval status) so sessions can be resumed without
-  loss. No database required.
+- **Scenario Store**: A configurable directory (default `/Volumes/HomeRAID/stories/`) containing one subdirectory per scenario. Each subdirectory holds `scenario.json` (full scenario state: selected media, captions, narrative, music selection, approval status) and `output.mp4` (generated video, if produced). No database required.
 
 ## Clarifications
 
@@ -222,6 +220,14 @@ the user explicitly requested them.
 - Q: Multi-scenario management? → A: One active scenario at a time; past generated videos are listable by asking — no parallel scenarios needed.
 - Q: Generation failure recovery? → A: Restart from scratch (no resume), log failures, retry automatically up to a fixed limit before reporting failure to the user.
 - Q: Music catalog scope? → A: Small curated set of 10-20 royalty-free tracks organized by mood category; user can always provide their own audio file as an alternative.
+
+### Session 2026-04-05
+
+- Q: Where does the story engine run and what invokes it? → A: Claude Code agent running on user's machine, calling Immich REST API and Mac Mini over LAN. Claude session exposed remotely so user can trigger story generation from Claude mobile client.
+- Q: What tool assembles the video? → A: FFmpeg installed on Mac Mini via brew; invoked over SSH by the Claude Code agent.
+- Q: How does the Story Engine query Immich? → A: Direct Immich REST API v2.6.3 — no MCP intermediary.
+- Q: Where are generated videos stored? → A: Configurable base path, default `/Volumes/HomeRAID/stories/{scenario-id}/output.mp4`.
+- Q: How are HEIC photos handled during video assembly? → A: Converted to JPEG on the fly using macOS `sips`; originals untouched; temp files deleted after assembly.
 
 ## Success Criteria *(mandatory)*
 
@@ -245,15 +251,21 @@ the user explicitly requested them.
 
 - The photo/video library is indexed in Immich with face recognition and captions
   already enabled — this is a prerequisite, not in scope for this feature.
-- ImmichMCP or equivalent Immich API access is available for the Story Engine to
-  query; setting that up is outside this feature's scope.
+- The Story Engine queries Immich directly via its REST API (v2.6.3). Key endpoints:
+  `/api/search/smart` (CLIP semantic search), `/api/people` (face lookup),
+  `/api/search/metadata` (date/location filters), `/api/assets/{id}/original`
+  (file download for video generation). No MCP intermediary required.
 - Music suggestions are drawn from a bundled set of 10-20 royalty-free tracks
   organized by mood category (e.g., upbeat, calm, sentimental, fun). The user
   can always bypass suggestions by providing their own audio file path; licensing
   for user-supplied music is the user's responsibility.
 - Video output is MP4 format — the most universally compatible for home playback.
-- The primary interaction surface is conversational AI; no standalone GUI is
-  required for v1.
+- Video assembly uses FFmpeg (installed on Mac Mini via brew). The Claude Code agent invokes FFmpeg over SSH to assemble the final video on the server.
+- HEIC photos are converted to JPEG on the fly during assembly using macOS `sips` (built-in, no install required). Originals are never modified; converted files are written to a temp directory and deleted after assembly.
+- Generated videos and scenario files are stored at a configurable base path, defaulting to `/Volumes/HomeRAID/stories/`. Structure: `stories/{scenario-id}/scenario.json` and `stories/{scenario-id}/output.mp4`.
+- The primary interaction surface is conversational AI (Claude Code agent); no
+  standalone GUI is required for v1. The Claude session is exposed remotely
+  so the user can initiate story generation from the Claude mobile client.
 - A scenario contains a maximum of 60 media items to keep generation times
   predictable; larger events should be broken into sub-stories.
 - The system has a single user — no multi-user access control needed in v1.

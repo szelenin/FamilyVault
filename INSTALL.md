@@ -370,6 +370,72 @@ ssh macmini.local "curl -sf http://127.0.0.1:2283/api/server/ping"
 
 ---
 
+## Phase 4.5: Story Engine Setup
+
+Install the AI Story Engine so Claude can create video clips from your Immich library.
+
+### Step 4.5.1: Install FFmpeg
+
+**[AGENT]** Install FFmpeg on Mac Mini:
+```bash
+ssh macmini "/opt/homebrew/bin/brew install ffmpeg"
+```
+
+**Verify**:
+```bash
+ssh macmini "/opt/homebrew/bin/ffmpeg -version 2>&1 | head -1"
+```
+Expected: `ffmpeg version 8.x ...`
+
+### Step 4.5.2: Install Python requests
+
+**[AGENT]** Install requests library:
+```bash
+ssh macmini "pip3 install requests"
+```
+
+**Verify**:
+```bash
+ssh macmini "python3 -c 'import requests; print(requests.__version__)'"
+```
+Expected: version number printed.
+
+### Step 4.5.3: Create stories directory
+
+**[AGENT]** Create the stories output directory:
+```bash
+ssh macmini "mkdir -p /Volumes/HomeRAID/stories"
+```
+
+**Verify**:
+```bash
+ssh macmini "ls /Volumes/HomeRAID/stories && echo ok"
+```
+Expected: `ok`
+
+### Step 4.5.4: Sync scripts to Mac Mini
+
+**[AGENT]** Copy story engine scripts:
+```bash
+rsync -av setup/story-engine/scripts/ macmini:~/projects/takeout/takeout/setup/story-engine/scripts/
+```
+
+**Verify**:
+```bash
+ssh macmini "python3 ~/projects/takeout/takeout/setup/story-engine/scripts/manage_scenario.py list"
+```
+Expected: `No scenarios found.`
+
+### Step 4.5.5: Verify SKILL.md is in place
+
+The Claude Code skill file at `.claude/skills/story-engine/SKILL.md` tells Claude how to handle story requests. It is already in the repository. To use story engine, start a conversation with Claude Code and say:
+
+> "Create a story about [event]"
+
+Claude will search Immich, propose a scenario, and guide you through music selection and video generation. See `setup/story-engine/README.md` for full usage.
+
+---
+
 ## Phase 5: Final Verification
 
 Run after all phases complete.
