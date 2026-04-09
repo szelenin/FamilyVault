@@ -76,18 +76,34 @@ def build_filter_complex(
     resolution: str,
     transition: str,
     has_audio: bool,
+    input_types: Optional[List[str]] = None,
 ) -> str:
-    """Build FFmpeg filter_complex string for image slideshow with optional audio."""
+    """Build FFmpeg filter_complex string for mixed photo/video slideshow.
+
+    Args:
+        input_types: List of "IMAGE" or "VIDEO" per input. If None, all are IMAGE.
+    """
+    if input_types is None:
+        input_types = ["IMAGE"] * n_inputs
+
     parts = []
 
-    # Loop each still image to its required duration, then scale/pad
+    # Prepare each input: images need loop, videos just need scale/trim
     for i in range(n_inputs):
         dur = durations[i]
-        parts.append(
-            f"[{i}:v]loop=loop=-1:size=1:start=0,"
-            f"trim=duration={dur:.3f},setpts=PTS-STARTPTS,"
-            f"{scale_pad_filter(resolution)},fps=25[v{i}]"
-        )
+        if input_types[i] == "VIDEO":
+            # Video: trim to duration, scale/pad, set fps
+            parts.append(
+                f"[{i}:v]trim=duration={dur:.3f},setpts=PTS-STARTPTS,"
+                f"{scale_pad_filter(resolution)},fps=30[v{i}]"
+            )
+        else:
+            # Image: loop to create video from still, then scale/pad
+            parts.append(
+                f"[{i}:v]loop=loop=-1:size=1:start=0,"
+                f"trim=duration={dur:.3f},setpts=PTS-STARTPTS,"
+                f"{scale_pad_filter(resolution)},fps=30[v{i}]"
+            )
 
     if n_inputs == 1:
         parts.append(f"[v0]null[vout]")
@@ -123,7 +139,7 @@ def detect_heic(mime_type: str) -> bool:
 
 def sips_convert_cmd(src: str, dst: str) -> str:
     """Return sips shell command to convert HEIC to JPEG."""
-    return f"sips -s format JPEG '{src}' --out '{dst}'"
+    return f"sips -s format JPEG -s formatOptions 100 '{src}' --out '{dst}'"
 
 
 def make_temp_dir_path(scenario_id: str, base_tmp: str = "/tmp") -> str:
@@ -182,13 +198,15 @@ def build_ffmpeg_cmd(
     cmd += [
         "-c:v", "libx264",
         "-preset", "medium",
-        "-crf", "23",
+        "-crf", "18",
+        "-maxrate", "10M",
+        "-bufsize", "20M",
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         "-t", str(total_duration(durations, fade_duration)),
     ]
     if has_audio:
-        cmd += ["-c:a", "aac", "-b:a", "128k"]
+        cmd += ["-c:a", "aac", "-b:a", "192k"]
 
     cmd.append(output_path)
     return cmd

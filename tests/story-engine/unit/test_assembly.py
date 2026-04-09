@@ -199,3 +199,147 @@ class TestBuildFFmpegCmd:
         path = make_temp_dir_path("2025-03-15-edgar-birthday", base_tmp="/tmp")
         assert "2025-03-15-edgar-birthday" in path
         assert path.startswith("/tmp")
+
+
+# ---------------------------------------------------------------------------
+# T041: Video output quality tests (US4)
+# ---------------------------------------------------------------------------
+
+class TestVideoOutputQuality:
+    def _make_scenario(self, with_music=False):
+        scenario = {
+            "items": [
+                {"asset_id": "a1", "_local_path": "/tmp/a1.jpg", "mime_type": "image/jpeg"},
+                {"asset_id": "a2", "_local_path": "/tmp/a2.jpg", "mime_type": "image/jpeg"},
+            ],
+            "music": None,
+        }
+        if with_music:
+            scenario["music"] = {"type": "bundled", "path": "/music/track.mp3"}
+        return scenario
+
+    def test_ffmpeg_cmd_crf_18(self):
+        """Output video should use CRF 18 for high quality."""
+        cmd = build_ffmpeg_cmd(self._make_scenario(), "/out/output.mp4",
+                               image_duration=4, fade_duration=1.0,
+                               resolution="1920:1080", transition="fade",
+                               ffmpeg_bin="ffmpeg")
+        assert "-crf" in cmd
+        crf_idx = cmd.index("-crf")
+        assert cmd[crf_idx + 1] == "18"
+
+    def test_ffmpeg_cmd_maxrate_10M(self):
+        """Output should cap bitrate at 10M."""
+        cmd = build_ffmpeg_cmd(self._make_scenario(), "/out/output.mp4",
+                               image_duration=4, fade_duration=1.0,
+                               resolution="1920:1080", transition="fade",
+                               ffmpeg_bin="ffmpeg")
+        assert "-maxrate" in cmd
+        mr_idx = cmd.index("-maxrate")
+        assert cmd[mr_idx + 1] == "10M"
+
+    def test_ffmpeg_cmd_30fps(self):
+        """Output should use 30 fps."""
+        filter_str = build_filter_complex(
+            n_inputs=2,
+            durations=[4.0, 4.0],
+            fade=1.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+        )
+        assert "fps=30" in filter_str
+
+    def test_sips_quality_100(self):
+        """HEIC conversion should use maximum JPEG quality."""
+        cmd = sips_convert_cmd("/in/photo.heic", "/out/photo.jpg")
+        assert "formatOptions" in cmd
+        assert "100" in cmd
+
+    def test_audio_bitrate_192k(self):
+        """Audio should be 192k, not 128k."""
+        cmd = build_ffmpeg_cmd(self._make_scenario(with_music=True), "/out/output.mp4",
+                               image_duration=4, fade_duration=1.0,
+                               resolution="1920:1080", transition="fade",
+                               ffmpeg_bin="ffmpeg")
+        assert "192k" in cmd
+
+
+# ---------------------------------------------------------------------------
+# T050: Video clip inclusion tests (US3)
+# ---------------------------------------------------------------------------
+
+class TestVideoClipInclusion:
+    def test_build_filter_complex_with_video_clip(self):
+        """Video inputs should NOT use loop filter."""
+        fc = build_filter_complex(
+            n_inputs=3,
+            durations=[4.0, 10.0, 4.0],
+            fade=1.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+            input_types=["IMAGE", "VIDEO", "IMAGE"],
+        )
+        # First input (image) should have loop
+        assert "loop=loop=-1:size=1:start=0" in fc.split(";")[0]
+        # Second input (video) should NOT have loop
+        video_part = fc.split(";")[1]
+        assert "loop" not in video_part
+        assert "trim=duration=10.000" in video_part
+        # Third input (image) should have loop
+        assert "loop=loop=-1:size=1:start=0" in fc.split(";")[2]
+
+    def test_build_filter_complex_video_trim(self):
+        """Video clips trimmed to specified duration."""
+        fc = build_filter_complex(
+            n_inputs=1,
+            durations=[5.5],
+            fade=0.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+            input_types=["VIDEO"],
+        )
+        assert "trim=duration=5.500" in fc
+        assert "loop" not in fc
+
+    def test_build_filter_complex_photo_to_video_transition(self):
+        """Photo→Video transition uses xfade like photo→photo."""
+        fc = build_filter_complex(
+            n_inputs=2,
+            durations=[4.0, 10.0],
+            fade=1.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+            input_types=["IMAGE", "VIDEO"],
+        )
+        assert "xfade" in fc
+
+    def test_build_filter_complex_video_to_photo_transition(self):
+        """Video→Photo transition uses xfade."""
+        fc = build_filter_complex(
+            n_inputs=2,
+            durations=[10.0, 4.0],
+            fade=1.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+            input_types=["VIDEO", "IMAGE"],
+        )
+        assert "xfade" in fc
+
+    def test_build_filter_complex_all_videos(self):
+        """All-video input should have no loop filters."""
+        fc = build_filter_complex(
+            n_inputs=2,
+            durations=[8.0, 12.0],
+            fade=1.0,
+            resolution="1920:1080",
+            transition="fade",
+            has_audio=False,
+            input_types=["VIDEO", "VIDEO"],
+        )
+        assert "loop" not in fc
+        assert "xfade" in fc

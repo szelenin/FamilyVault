@@ -124,6 +124,7 @@ def parse_asset_response(data: dict, city_hint: Optional[str] = None,
         exif = item.get("exifInfo") or {}
         result.append({
             "id": item.get("id"),
+            "asset_id": item.get("id"),
             "type": item.get("type"),
             "filename": item.get("originalFileName"),
             "mime_type": item.get("originalMimeType"),
@@ -224,6 +225,166 @@ def search_photos(
         sys.exit(3)
 
     return assets
+
+
+def search_multi(
+    immich_url,
+    session,
+    queries,
+    after=None,
+    before=None,
+    city=None,
+    country=None,
+    person_name=None,
+    limit=200,
+    max_retries=3,
+):
+    # type: (str, requests.Session, list, Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], int, int) -> list
+    """Issue multiple search queries and merge results into a deduplicated candidate list.
+
+    Each query is tried as both smart search and metadata search. Failed queries
+    are retried up to max_retries times. Proceeds with partial results if some
+    queries still fail after retries.
+    """
+    seen_ids = set()
+    all_assets = []
+    failed_queries = []
+
+    person_id = None
+    if person_name:
+        person_id = person_name_to_id(session, person_name, immich_url)
+
+    for query in queries:
+        success = False
+        for attempt in range(max_retries):
+            try:
+                assets = []
+                # Smart search (semantic/CLIP)
+                smart_body = build_smart_search_request(
+                    query=query, person_id=person_id,
+                    after=after, before=before,
+                    media_type="", limit=limit,
+                )
+                # Remove type filter to get both IMAGE and VIDEO
+                smart_body.pop("type", None)
+                resp = session.post(f"{immich_url}/api/search/smart", json=smart_body)
+                resp.raise_for_status()
+                assets.extend(parse_asset_response(resp.json(), city_hint=city, country_hint=country))
+
+                # Also try metadata search if city/country given
+                if city or country:
+                    meta_body = build_metadata_search_request(
+                        after=after, before=before,
+                        city=city, country=country,
+                        person_id=person_id,
+                        media_type="", limit=limit,
+                    )
+                    meta_body.pop("type", None)
+                    resp = session.post(f"{immich_url}/api/search/metadata", json=meta_body)
+                    resp.raise_for_status()
+                    assets.extend(parse_asset_response(resp.json()))
+
+                # Deduplicate and add
+                for a in assets:
+                    aid = a.get("id")
+                    if aid and aid not in seen_ids:
+                        seen_ids.add(aid)
+                        a["source_query"] = query
+                        all_assets.append(a)
+
+                success = True
+                break
+            except requests.RequestException:
+                import time
+                time.sleep(1)
+
+        if not success:
+            failed_queries.append(query)
+
+    if failed_queries and all_assets:
+        print(f"WARNING: Some queries failed after {max_retries} retries: {failed_queries}",
+              file=sys.stderr)
+    elif failed_queries and not all_assets:
+        print(f"ERROR: All queries failed: {failed_queries}", file=sys.stderr)
+
+    return all_assets
+
+
+def enrich_assets(session, immich_url, assets, max_workers=10):
+    # type: (requests.Session, str, list, int) -> list
+    """Fetch full asset detail for each asset ID via GET /api/assets/{id}.
+
+    Enriches each asset dict with: thumbhash, face_count, width, height, duration.
+    Uses ThreadPoolExecutor for parallel fetching.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Extract API key for thread-safe requests (Session is NOT thread-safe)
+    api_key = session.headers.get("x-api-key", "")
+    headers = {"x-api-key": api_key, "Accept": "application/json"}
+
+    def _fetch_detail(asset):
+        aid = asset.get("id")
+        try:
+            resp = requests.get(f"{immich_url}/api/assets/{aid}", headers=headers, timeout=10)
+            resp.raise_for_status()
+            detail = resp.json()
+            exif = detail.get("exifInfo") or {}
+            people = detail.get("people") or []
+            asset["thumbhash"] = detail.get("thumbhash")
+            asset["face_count"] = len(people)
+            asset["people_names"] = [p.get("name", "") for p in people if p.get("name")]
+            asset["width"] = exif.get("exifImageWidth") or 0
+            asset["height"] = exif.get("exifImageHeight") or 0
+            asset["city"] = asset.get("city") or exif.get("city")
+            asset["country"] = asset.get("country") or exif.get("country")
+            asset["description"] = asset.get("description") or exif.get("description") or ""
+            asset["type"] = detail.get("type", asset.get("type", "IMAGE"))
+            if asset["type"] == "VIDEO":
+                dur_str = detail.get("duration", "0:00:00.00000")
+                asset["duration"] = _parse_duration(dur_str)
+            else:
+                asset["duration"] = None
+            # Relevance score: use position in search results as a proxy (0-1)
+            # This is a rough heuristic — CLIP results are roughly ranked by relevance
+            asset.setdefault("relevance_score", 0.5)
+        except requests.RequestException:
+            asset.setdefault("thumbhash", None)
+            asset.setdefault("face_count", 0)
+            asset.setdefault("width", 0)
+            asset.setdefault("height", 0)
+            asset.setdefault("duration", None)
+        return asset
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_detail, a): a for a in assets}
+        for future in as_completed(futures):
+            future.result()  # propagate exceptions
+
+    # Assign relevance scores based on search result position per query
+    query_groups = {}
+    for i, a in enumerate(assets):
+        q = a.get("source_query", "")
+        query_groups.setdefault(q, []).append(a)
+    for q, group in query_groups.items():
+        for rank, a in enumerate(group):
+            a["relevance_score"] = max(0.1, 1.0 - rank * 0.03)
+
+    return assets
+
+
+def _parse_duration(dur_str):
+    """Parse Immich duration string like '0:00:12.50000' to seconds float."""
+    if not dur_str or dur_str == "0:00:00.00000":
+        return 0.0
+    try:
+        parts = dur_str.split(":")
+        if len(parts) == 3:
+            h, m, s = parts
+            return int(h) * 3600 + int(m) * 60 + float(s)
+        return float(dur_str)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def main():

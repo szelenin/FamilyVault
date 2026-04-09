@@ -121,6 +121,8 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - PostgreSQL (managed by Immich Docker Compose), Redis, files on `/Volumes/HomeRAID/immich` (002-immich-setup)
 - Python 3.13 (on Mac Mini) + Bash (Claude Code skills) + FFmpeg 7+ (Mac Mini, brew), Immich REST API v2.6.3, `sips` (built-in macOS), `pytest` 8+ (001-ai-story-engine)
 - Files on `/Volumes/HomeRAID/stories/` (configurable via `STORIES_DIR` env var) (001-ai-story-engine)
+- Python 3.13 (on Mac Mini) + Bash (Claude Code skills) + Immich REST API v2.6.3, FFmpeg 8+ (via Homebrew), `sips` (macOS native for HEIC), `pytest` 8+ (005-smart-photo-selection)
+- Files on `/Volumes/HomeRAID/stories/` (project files, candidate pools) (005-smart-photo-selection)
 
 ## Recent Changes
 - 002-immich-setup: Added Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)
