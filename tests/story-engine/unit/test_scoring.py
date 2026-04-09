@@ -9,6 +9,9 @@ from scripts.score_and_select import (
     allocate_budget,
     select_timeline,
     filter_garbage,
+    discover_scenes,
+    verify_must_haves,
+    detect_mode_from_prompt,
 )
 
 
@@ -446,3 +449,162 @@ class TestFilterNonPhoto:
         # Not hard-excluded, but should be kept (deprioritized via score penalty later)
         kept, filtered, _ = filter_garbage([c])
         assert len(kept) == 1  # kept, not excluded
+
+
+# ---------------------------------------------------------------------------
+# T006: Scene Discovery tests (US1)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverScenes:
+    def test_discover_scenes_returns_all(self):
+        """Discovery returns ALL scenes, no budget cap."""
+        candidates = []
+        # 3 scenes: morning, afternoon, evening
+        for hour, count in [(9, 20), (14, 30), (19, 10)]:
+            for i in range(count):
+                candidates.append(_make_candidate(
+                    asset_id="h{}_{}".format(hour, i),
+                    taken_at="2026-03-31T{:02d}:{:02d}:00Z".format(hour, i % 60),
+                    face_count=i % 3,
+                ))
+        result = discover_scenes(candidates, mode="trip")
+        assert len(result["scenes"]) == 3
+        total_items = sum(s["photo_count"] + s["video_count"] for s in result["scenes"])
+        assert total_items == 60  # all candidates accounted for
+
+    def test_discover_scenes_no_budget_cap(self):
+        """Even with 100 items per scene, all are counted (no budget)."""
+        candidates = [
+            _make_candidate(asset_id="big{}".format(i),
+                          taken_at="2026-03-31T12:{:02d}:00Z".format(i % 60))
+            for i in range(100)
+        ]
+        result = discover_scenes(candidates, mode="trip")
+        total = sum(s["photo_count"] + s["video_count"] for s in result["scenes"])
+        assert total == 100
+
+    def test_discover_scenes_trip_mode(self):
+        """Trip mode clusters by 30-minute time gaps."""
+        c1 = _make_candidate(asset_id="a", taken_at="2026-03-31T10:00:00Z")
+        c2 = _make_candidate(asset_id="b", taken_at="2026-03-31T10:15:00Z")
+        c3 = _make_candidate(asset_id="c", taken_at="2026-03-31T12:00:00Z")
+        result = discover_scenes([c1, c2, c3], mode="trip")
+        assert len(result["scenes"]) == 2
+
+    def test_discover_scenes_includes_cities(self):
+        """Each scene includes the cities found in its candidates."""
+        c1 = _make_candidate(asset_id="m1", taken_at="2026-03-31T10:00:00Z")
+        c1["city"] = "Miami"
+        c2 = _make_candidate(asset_id="m2", taken_at="2026-03-31T10:10:00Z")
+        c2["city"] = "Miami Beach"
+        c3 = _make_candidate(asset_id="cg", taken_at="2026-03-31T18:00:00Z")
+        c3["city"] = "Coconut Grove"
+        result = discover_scenes([c1, c2, c3], mode="trip")
+        scene1_cities = result["scenes"][0]["cities"]
+        assert "Miami" in scene1_cities
+        assert "Miami Beach" in scene1_cities
+        scene2_cities = result["scenes"][1]["cities"]
+        assert "Coconut Grove" in scene2_cities
+
+    def test_discover_scenes_groups_by_day_over_20(self):
+        """When >20 scenes, result includes day_groups."""
+        candidates = []
+        for day in range(1, 8):  # 7 days
+            for hour in [8, 10, 12, 14, 16]:  # 5 scenes per day = 35 total
+                candidates.append(_make_candidate(
+                    asset_id="d{}h{}".format(day, hour),
+                    taken_at="2026-03-{:02d}T{:02d}:00:00Z".format(day, hour),
+                ))
+        result = discover_scenes(candidates, mode="trip")
+        assert len(result["scenes"]) > 20
+        assert "day_groups" in result
+        assert len(result["day_groups"]) == 7
+
+
+# ---------------------------------------------------------------------------
+# T014: Must-have verification tests (US3)
+# ---------------------------------------------------------------------------
+
+class TestVerifyMustHaves:
+    def test_verify_must_haves_all_found(self):
+        """All must-have keywords match a scene."""
+        # Scene with "Miami" city and "speedboat" content
+        scenes = [
+            {"id": "s1", "label": "Scene 1", "cities": ["Miami Beach"],
+             "asset_ids": ["a1", "a2"], "people": []},
+            {"id": "s2", "label": "Scene 2", "cities": ["Coconut Grove"],
+             "asset_ids": ["a3"], "people": []},
+        ]
+        candidates = [
+            _make_candidate(asset_id="a1"),
+            _make_candidate(asset_id="a2"),
+            _make_candidate(asset_id="a3"),
+        ]
+        candidates[0]["city"] = "Miami Beach"
+        candidates[0]["source_query"] = "speedboat"
+        candidates[2]["city"] = "Coconut Grove"
+
+        result = verify_must_haves(
+            keywords=["speedboat", "coconut grove"],
+            discovery_scenes=scenes,
+            candidates=candidates,
+        )
+        assert len(result["found"]) == 2
+        assert len(result["missing"]) == 0
+
+    def test_verify_must_haves_missing_triggers_search(self):
+        """Missing must-have is reported."""
+        scenes = [
+            {"id": "s1", "label": "Scene 1", "cities": ["Miami"],
+             "asset_ids": ["a1"], "people": []},
+        ]
+        candidates = [_make_candidate(asset_id="a1")]
+
+        result = verify_must_haves(
+            keywords=["parasailing"],
+            discovery_scenes=scenes,
+            candidates=candidates,
+        )
+        assert len(result["found"]) == 0
+        assert len(result["missing"]) == 1
+        assert "parasailing" in result["missing"]
+
+    def test_verify_must_haves_matches_by_city(self):
+        """Must-have keyword matches scene by city name."""
+        scenes = [
+            {"id": "s1", "label": "Scene 1", "cities": ["Vizcaya"],
+             "asset_ids": ["a1"], "people": []},
+        ]
+        candidates = [_make_candidate(asset_id="a1")]
+        candidates[0]["city"] = "Vizcaya"
+
+        result = verify_must_haves(
+            keywords=["vizcaya"],
+            discovery_scenes=scenes,
+            candidates=candidates,
+        )
+        assert len(result["found"]) == 1
+        assert result["found"][0]["keyword"] == "vizcaya"
+
+
+# ---------------------------------------------------------------------------
+# T019: Detection mode tests (US4)
+# ---------------------------------------------------------------------------
+
+class TestDetectMode:
+    def test_detect_mode_trip(self):
+        """Trip-related prompts select trip mode."""
+        assert detect_mode_from_prompt("make a clip of our Miami trip") == "trip"
+        assert detect_mode_from_prompt("video of our vacation in Paris") == "trip"
+        assert detect_mode_from_prompt("clip from our trip to Japan last summer") == "trip"
+
+    def test_detect_mode_person_timeline(self):
+        """Person growth prompts select person-timeline mode."""
+        assert detect_mode_from_prompt("make a clip of how Edgar grows up") == "person-timeline"
+        assert detect_mode_from_prompt("timeline of my daughter") == "person-timeline"
+        assert detect_mode_from_prompt("video of Sarah through the years") == "person-timeline"
+
+    def test_detect_mode_default_general(self):
+        """Unrecognized prompts default to general mode."""
+        assert detect_mode_from_prompt("make a clip") == "general"
+        assert detect_mode_from_prompt("something cool") == "general"

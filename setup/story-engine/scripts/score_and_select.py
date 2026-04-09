@@ -453,6 +453,165 @@ def allocate_budget(scenes, total_budget, overrides=None):
     return alloc
 
 
+DETECTION_MODES = ["trip", "person-timeline", "general"]
+
+TRIP_KEYWORDS = [
+    "trip", "vacation", "holiday", "travel", "visit", "toured",
+    "flew to", "drove to", "stayed in", "weekend in", "days in",
+]
+PERSON_TIMELINE_KEYWORDS = [
+    "grows up", "growing up", "through the years", "over the years",
+    "timeline of", "life of", "journey of", "evolution of",
+    "my daughter", "my son", "my kid", "my child", "my baby",
+]
+
+
+def detect_mode_from_prompt(prompt):
+    """Analyze prompt to select detection mode.
+
+    Returns: "trip", "person-timeline", or "general".
+    """
+    prompt_lower = prompt.lower()
+
+    # Check person-timeline first (more specific)
+    for kw in PERSON_TIMELINE_KEYWORDS:
+        if kw in prompt_lower:
+            return "person-timeline"
+
+    # Check trip
+    for kw in TRIP_KEYWORDS:
+        if kw in prompt_lower:
+            return "trip"
+
+    return "general"
+
+
+def verify_must_haves(keywords, discovery_scenes, candidates):
+    """Cross-reference must-have keywords against discovered scenes.
+
+    Returns dict with 'found' (keyword + matched scene) and 'missing' (unmatched keywords).
+    Matching checks: scene cities, candidate source_query, candidate city, candidate description.
+    """
+    found = []
+    missing = []
+
+    for kw in keywords:
+        kw_lower = kw.lower()
+        matched_scene = None
+
+        for scene in discovery_scenes:
+            # Check cities
+            for city in scene.get("cities", []):
+                if kw_lower in city.lower():
+                    matched_scene = scene
+                    break
+            if matched_scene:
+                break
+
+            # Check candidates in this scene
+            for c in candidates:
+                cid = _aid(c)
+                if cid not in scene.get("asset_ids", []):
+                    continue
+                # Check source_query
+                if kw_lower in (c.get("source_query") or "").lower():
+                    matched_scene = scene
+                    break
+                # Check city
+                if kw_lower in (c.get("city") or "").lower():
+                    matched_scene = scene
+                    break
+                # Check description
+                if kw_lower in (c.get("description") or "").lower():
+                    matched_scene = scene
+                    break
+                # Check people names
+                for name in (c.get("people_names") or []):
+                    if kw_lower in name.lower():
+                        matched_scene = scene
+                        break
+                if matched_scene:
+                    break
+            if matched_scene:
+                break
+
+        if matched_scene:
+            found.append({"keyword": kw, "scene_id": matched_scene["id"], "scene_label": matched_scene.get("label", "")})
+        else:
+            missing.append(kw)
+
+    return {"found": found, "missing": missing}
+
+
+def discover_scenes(candidates, mode="trip", gap_minutes=30):
+    """Phase A: Discover all scenes from candidates. No budget applied.
+
+    Returns a discovery result dict with all scenes, item counts, cities, and
+    optional day_groups when scenes > 20.
+
+    Args:
+        candidates: List of enriched candidate dicts (already garbage-filtered).
+        mode: Detection mode — "trip" (30-min gap clustering), others raise NotImplementedError.
+        gap_minutes: Gap threshold for trip mode.
+    """
+    if mode == "person-timeline":
+        raise NotImplementedError("person-timeline mode not yet implemented")
+
+    # Use existing scene detection (works for trip and general modes)
+    raw_scenes = detect_scenes(candidates, gap_minutes=gap_minutes)
+
+    # Enrich each scene with photo/video counts, cities, people
+    scenes = []
+    for scene in raw_scenes:
+        scene_candidates = [
+            c for c in candidates
+            if _aid(c) in scene.get("asset_ids", [])
+        ]
+        photo_count = sum(1 for c in scene_candidates if c.get("type") != "VIDEO")
+        video_count = sum(1 for c in scene_candidates if c.get("type") == "VIDEO")
+        cities = sorted(set(
+            c.get("city") for c in scene_candidates
+            if c.get("city")
+        ))
+        people = sorted(set(
+            name
+            for c in scene_candidates
+            for name in (c.get("people_names") or [])
+            if name
+        ))
+
+        scenes.append({
+            "id": scene["id"],
+            "label": scene.get("label", ""),
+            "time_range": scene.get("time_range", []),
+            "photo_count": photo_count,
+            "video_count": video_count,
+            "cities": cities,
+            "people": people,
+            "asset_ids": scene.get("asset_ids", []),
+        })
+
+    result = {
+        "scenes": scenes,
+        "total_candidates": len(candidates),
+    }
+
+    # Day grouping when > 20 scenes
+    if len(scenes) > 20:
+        day_groups = {}
+        for scene in scenes:
+            tr = scene.get("time_range", [""])
+            day = tr[0][:10] if tr else ""
+            if day not in day_groups:
+                day_groups[day] = {"date": day, "scene_count": 0, "total_items": 0, "scene_ids": []}
+            day_groups[day]["scene_count"] += 1
+            day_groups[day]["total_items"] += scene["photo_count"] + scene["video_count"]
+            day_groups[day]["scene_ids"].append(scene["id"])
+        result["day_groups"] = sorted(day_groups.values(), key=lambda g: g["date"])
+
+    return result
+
+
 def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_haves=None):
     # type: (list, dict, list, dict, Optional[list]) -> list
     """Pick final timeline items respecting budget, diversity, and must-haves."""
