@@ -146,6 +146,40 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-010: iCloud Metadata Sync to Immich
+
+**Problem**: iCloud Photos has rich metadata (favorites, albums, keywords, ratings, people names) that osxphotos can access via its Python API. However, none of this metadata reaches Immich: osxphotos writes to XMP sidecars which Immich's external library scanner ignores, and there is no sync script to bridge the gap. This means user curation in Photos.app (years of starring favorites, organizing albums) is invisible to the story engine.
+
+**Metadata available in iCloud (via osxphotos Python API)**:
+- Favorites (liked photos)
+- Albums and smart albums
+- Keywords and tags
+- People/face names (mapped by osxphotos, independent of Immich face detection)
+- Ratings (if set)
+- Hidden/archived status
+- Edited versions
+
+**Immich API endpoints available for writing**:
+- `PUT /api/assets/{id}` — set `isFavorite`, `isArchived`, `rating`
+- `POST /api/albums` + `PUT /api/albums/{id}/assets` — create albums and add assets
+- `POST /api/tags` + tag assignment — create and assign tags
+- `PUT /api/people/{id}` — update person names (align with iCloud face names)
+
+**Requirements**:
+- R041: Post-export sync script that queries osxphotos Python API for all metadata per exported photo (favorites, albums, keywords, ratings, people names).
+- R042: Asset mapping — match each exported file to its Immich asset ID by filename, checksum, or original path.
+- R043: Sync favorites — set `isFavorite: true` on Immich assets that are favorited in iCloud.
+- R044: Sync albums — create Immich albums matching iCloud album structure, populate with correct assets.
+- R045: Sync keywords/tags — create Immich tags from iCloud keywords and assign to corresponding assets.
+- R046: Sync people names — map osxphotos person names to Immich detected faces where possible (match by face position or manual mapping).
+- R047: Sync ratings — set Immich rating field from iCloud ratings.
+- R048: Incremental sync — only process changes since last sync run (track sync state in a local manifest file).
+- R049: Run as part of the daily cron alongside `osxphotos export --update`.
+
+**Dependencies**: Requires osxphotos export (Phase 1) to be complete, and Immich external library to be indexed. Enables IMP-008 (Favorites Priority) to be immediately useful.
+
+---
+
 ## Implementation Order (recommended)
 
 | Priority | Improvement | Status | Rationale |
@@ -155,12 +189,17 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | Not started | Quick fix, high impact |
 | 4 | **IMP-006**: Smart Scene Discovery | Not started | Biggest architectural improvement — two-phase pipeline, prompt-aware detection |
 | 5 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
-| 6 | **IMP-008**: Favorites Priority | Not started | Leverages user curation for better selection |
-| 7 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
-| 8 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
-| 9 | **IMP-005**: Music & Audio | Deferred | Polish layer |
+| 6 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. Blocked by iCloud download completion. |
+| 7 | **IMP-008**: Favorites Priority | Not started | Leverages user curation — requires IMP-010 to have favorites in Immich |
+| 8 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
+| 9 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
+| 10 | **IMP-005**: Music & Audio | Deferred | Polish layer |
 
-**Note**: IMP-006 (Scene Discovery) is the biggest single improvement. IMP-009 (Screenshot filter) is a quick win that should go first.
+**Notes**:
+- IMP-009 (Screenshot filter) is a quick win — spec and implement first.
+- IMP-006 (Scene Discovery) is the biggest architectural change.
+- IMP-010 (Metadata Sync) is blocked by iCloud download completing but should be specced early since it's foundational for IMP-008.
+- IMP-008 (Favorites Priority) depends on IMP-010 having synced favorites into Immich.
 
 ---
 
