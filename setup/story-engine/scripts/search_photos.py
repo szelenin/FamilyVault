@@ -227,6 +227,82 @@ def search_photos(
     return assets
 
 
+def search_broad(
+    immich_url,
+    session,
+    queries,
+    after=None,
+    before=None,
+    person_name=None,
+    limit=500,
+    max_retries=3,
+):
+    """Broad search using CLIP (no city filter) + date-range metadata search.
+
+    Returns (candidates, count) where count is the total before dedup.
+    Does NOT filter by city — lets scene detection group by location.
+    """
+    seen_ids = set()
+    all_assets = []
+    raw_count = 0
+
+    person_id = None
+    if person_name:
+        person_id = person_name_to_id(session, person_name, immich_url)
+
+    # 1. CLIP semantic search for each query (no city filter)
+    for query in queries:
+        for attempt in range(max_retries):
+            try:
+                smart_body = build_smart_search_request(
+                    query=query, person_id=person_id,
+                    after=after, before=before,
+                    media_type="", limit=limit,
+                )
+                smart_body.pop("type", None)
+                resp = session.post(f"{immich_url}/api/search/smart", json=smart_body)
+                resp.raise_for_status()
+                assets = parse_asset_response(resp.json())
+                raw_count += len(assets)
+                for a in assets:
+                    aid = a.get("id")
+                    if aid and aid not in seen_ids:
+                        seen_ids.add(aid)
+                        a["source_query"] = query
+                        all_assets.append(a)
+                break
+            except requests.RequestException:
+                import time
+                time.sleep(1)
+
+    # 2. Metadata search by date range only (catches everything in the window)
+    if after or before:
+        for attempt in range(max_retries):
+            try:
+                meta_body = build_metadata_search_request(
+                    after=after, before=before,
+                    person_id=person_id,
+                    limit=limit,
+                )
+                meta_body.pop("type", None)
+                resp = session.post(f"{immich_url}/api/search/metadata", json=meta_body)
+                resp.raise_for_status()
+                assets = parse_asset_response(resp.json())
+                raw_count += len(assets)
+                for a in assets:
+                    aid = a.get("id")
+                    if aid and aid not in seen_ids:
+                        seen_ids.add(aid)
+                        a["source_query"] = "_date_range"
+                        all_assets.append(a)
+                break
+            except requests.RequestException:
+                import time
+                time.sleep(1)
+
+    return all_assets, raw_count
+
+
 def search_multi(
     immich_url,
     session,

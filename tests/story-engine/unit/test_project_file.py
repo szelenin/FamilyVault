@@ -14,6 +14,8 @@ from scripts.manage_project import (
     reorder_items,
     trim_video,
     set_budget,
+    set_discovery,
+    set_scene_confirmation,
     VALID_STATES,
     VALID_TRANSITIONS,
 )
@@ -209,3 +211,50 @@ class TestSetBudget:
         )
         assert updated["budget"]["per_scene_overrides"]["scene-001"] == 10
         assert updated["budget"]["per_scene_overrides"]["scene-002"] == 5
+
+
+# ---------------------------------------------------------------------------
+# T001: Discovery and confirmation fields
+# ---------------------------------------------------------------------------
+
+class TestDiscoveryFields:
+    def test_create_project_has_discovery_field(self, temp_stories_dir):
+        project = create_project("Disc Test", "test", stories_dir=temp_stories_dir)
+        assert "discovery" in project
+        assert project["discovery"]["scenes"] == []
+        assert project["discovery"]["total_candidates"] == 0
+        assert project["discovery"]["preview"] == {"album_id": None, "share_key": None}
+
+    def test_set_discovery_result(self, temp_stories_dir):
+        project = create_project("Disc Set", "test", stories_dir=temp_stories_dir)
+        discovery = {
+            "scenes": [
+                {"id": "s1", "label": "Speedboat tour", "time_range": ["2026-03-31T15:00", "2026-03-31T16:00"],
+                 "photo_count": 10, "video_count": 5, "cities": ["Miami Beach"]},
+                {"id": "s2", "label": "Vizcaya Gardens", "time_range": ["2026-04-01T11:00", "2026-04-01T13:00"],
+                 "photo_count": 20, "video_count": 3, "cities": ["Miami"]},
+            ],
+            "total_candidates": 150,
+            "preview": {"album_id": "alb-123", "share_key": "key-abc"},
+        }
+        updated = set_discovery(project["id"], discovery, stories_dir=temp_stories_dir)
+        assert len(updated["discovery"]["scenes"]) == 2
+        assert updated["discovery"]["total_candidates"] == 150
+        assert updated["discovery"]["preview"]["album_id"] == "alb-123"
+
+    def test_set_scene_confirmation_include_all(self, temp_stories_dir):
+        project = create_project("Conf All", "test", stories_dir=temp_stories_dir)
+        updated = set_scene_confirmation(project["id"], "all", stories_dir=temp_stories_dir)
+        assert updated["scene_confirmation"] == "all"
+
+    def test_set_scene_confirmation_specific_scenes(self, temp_stories_dir):
+        project = create_project("Conf Some", "test", stories_dir=temp_stories_dir)
+        updated = set_scene_confirmation(
+            project["id"], ["s1", "s3", "s5"], stories_dir=temp_stories_dir)
+        assert updated["scene_confirmation"] == ["s1", "s3", "s5"]
+
+    def test_set_scene_confirmation_exclude_scenes(self, temp_stories_dir):
+        project = create_project("Conf Excl", "test", stories_dir=temp_stories_dir)
+        updated = set_scene_confirmation(
+            project["id"], {"exclude": ["s2", "s4"]}, stories_dir=temp_stories_dir)
+        assert updated["scene_confirmation"]["exclude"] == ["s2", "s4"]

@@ -71,6 +71,12 @@ def create_project(title, request, search_params=None, stories_dir=None):
             "trip_days": 0,
             "per_scene_overrides": {},
         },
+        "discovery": {
+            "scenes": [],
+            "total_candidates": 0,
+            "preview": {"album_id": None, "share_key": None},
+        },
+        "scene_confirmation": None,
         "music": None,
         "preview": {"album_id": None, "share_key": None},
         "created_at": now,
@@ -205,5 +211,33 @@ def set_budget(project_id, total=None, overrides=None, stories_dir=None):
         project["budget"]["total"] = total
     if overrides is not None:
         project["budget"]["per_scene_overrides"] = overrides
+    _save(project, stories_dir)
+    return project
+
+
+def set_discovery(project_id, discovery, stories_dir=None):
+    # type: (str, dict, Optional[str]) -> dict
+    """Set the discovery result (Phase A output) on a project."""
+    if stories_dir is None:
+        stories_dir = _default_stories_dir()
+    project = _load(project_id, stories_dir)
+    project["discovery"] = discovery
+    _save(project, stories_dir)
+    return project
+
+
+def set_scene_confirmation(project_id, confirmation, stories_dir=None):
+    # type: (str, object, Optional[str]) -> dict
+    """Set which scenes the user confirmed for Phase B.
+
+    confirmation can be:
+      - "all" — include all scenes
+      - ["s1", "s3"] — include specific scene IDs
+      - {"exclude": ["s2"]} — include all except listed
+    """
+    if stories_dir is None:
+        stories_dir = _default_stories_dir()
+    project = _load(project_id, stories_dir)
+    project["scene_confirmation"] = confirmation
     _save(project, stories_dir)
     return project

@@ -17,79 +17,97 @@ You help the user create, refine, and generate family video stories from their I
 
 **Workflow**:
 
-1. **Parse the request** — extract from the user's message:
+1. **Parse the request** — extract:
    - Semantic queries (e.g., "miami trip", "beach vacation")
    - Must-have keywords (e.g., "speed boat, vizcaya garden, sunset" — items after "must have")
    - Person names if mentioned
    - Date range if mentioned (after/before as YYYY-MM-DD)
-   - City or country if mentioned
+   - Detect mode: use `detect_mode_from_prompt()` — "trip" (location+date), "person-timeline" (person+time), or "general"
 
 2. **Create project**:
    ```python
-   from scripts.manage_project import create_project
+   from scripts.manage_project import create_project, set_discovery, set_scene_confirmation
    project = create_project(title="Miami Trip March 2026", request="original prompt",
-                            search_params={"queries": [...], "city": "Miami", ...},
+                            search_params={"queries": [...], "after": "2026-03-28", "before": "2026-04-02"},
                             stories_dir="/Volumes/HomeRAID/stories")
    ```
 
-3. **Multi-query search** via `search_photos.py`:
+3. **Phase A — Broad search + Scene Discovery**:
    ```python
-   from scripts.search_photos import make_session, search_multi, enrich_assets
+   from scripts.search_photos import make_session, search_broad, enrich_assets
+   from scripts.score_and_select import (
+       filter_garbage, discover_scenes, verify_must_haves,
+       detect_mode_from_prompt, extract_must_have_keywords
+   )
    session = make_session(immich_url, api_key_file)
-   assets = search_multi(session=session, immich_url=immich_url,
-                         queries=["miami trip", "speed boat", "vizcaya garden", "sunset"],
-                         city="Miami", after="2026-03-28", before="2026-04-02", limit=200)
+   
+   # Broad search: CLIP + date range, NO city filter
+   assets, raw_count = search_broad(session=session, immich_url=immich_url,
+       queries=["miami trip", "speed boat", "vizcaya garden", "sunset"],
+       after="2026-03-28", before="2026-04-02")
+   
+   # If >500 candidates, ask user: proceed or refine?
+   if raw_count > 500:
+       # Report count and ask user
+       pass
+   
    enriched = enrich_assets(session, immich_url, assets)
+   candidates, filtered, filter_summary = filter_garbage(enriched)
+   # Report: "Filtered 5 screenshots, 1 story-engine clip"
+   
+   # Discover ALL scenes (no budget)
+   mode = detect_mode_from_prompt(user_prompt)
+   discovery = discover_scenes(candidates, mode=mode)
+   
+   # Verify must-haves
+   must_have_keywords = extract_must_have_keywords(user_prompt)
+   if must_have_keywords:
+       mh_result = verify_must_haves(must_have_keywords, discovery["scenes"], candidates)
+       # Report: "Found: speedboat (Scene 3), vizcaya (Scene 8). Missing: parasailing"
    ```
 
-4. **Filter garbage, then score, dedup, select** via `score_and_select.py`:
+4. **Create discovery preview album** (one album with ALL content):
    ```python
-   from scripts.score_and_select import (
-       filter_garbage, score_candidates, detect_bursts, detect_scenes,
-       allocate_budget, select_timeline, extract_must_have_keywords,
-       generate_caption
-   )
-   # Filter screenshots, story-engine clips, non-photo content
-   candidates, filtered, filter_summary = filter_garbage(enriched)
-   # Report: "Filtered 5 screenshots, 1 story-engine clip, 2 non-photo files"
+   from scripts.preview import create_preview_album
+   all_asset_ids = [aid for c in candidates for aid in [c.get("asset_id") or c.get("id")]]
+   preview = create_preview_album(session, immich_url, all_asset_ids, title="Discovery: Miami Trip")
+   discovery["preview"] = {"album_id": preview["album_id"], "share_key": preview["share_key"]}
+   set_discovery(project_id, discovery, stories_dir=stories_dir)
+   ```
 
-   must_haves = extract_must_have_keywords(user_prompt)
-   scored = score_candidates(candidates, must_have_keywords=must_haves)
+5. **Present ALL scenes to user** — use the prompt to generate labels dynamically:
+
+   Found 268 photos and videos from March 28 - April 2.
+   Filtered 8 screenshots, 1 generated clip.
+   
+   Discovered 12 scenes:
+   1. Arrival evening (Mar 28, 7-9pm) — 5 photos, 2 videos · Miami
+   2. Morning walk (Mar 29, 8-9am) — 3 photos · Miami
+   3. Speedboat tour (Mar 31, 3-4pm) — 8 photos, 6 videos · Miami Beach [MUST-HAVE]
+   4. Coconut Grove sunset walk (Mar 31, 6-7pm) — 4 photos, 1 video · Coconut Grove
+   5. Vizcaya Gardens (Apr 1, 11am-1pm) — 20 photos, 3 videos [MUST-HAVE]
+   6. Passport office (Apr 1, 2-3pm) — 3 photos · Miami [MUST-HAVE]
+   ...
+   
+   Preview all content:
+   http://macmini:2283/share/KEY
+   
+   Say "include all" or select scenes: "include 1,3,4,5,6" or "skip 2"
+
+6. **User confirms scenes** → Phase B:
+   ```python
+   set_scene_confirmation(project_id, confirmation, stories_dir=stories_dir)
+   # Then apply scoring + budget only to confirmed scenes
+   from scripts.score_and_select import score_candidates, detect_bursts, allocate_budget, select_timeline
+   confirmed_candidates = [c for c in candidates if c meets confirmation criteria]
+   scored = score_candidates(confirmed_candidates, must_have_keywords=must_have_keywords)
    bursts = detect_bursts(scored)
    scenes = detect_scenes(scored)
    budget = allocate_budget(scenes, total_budget=10 + 5 * trip_days)
-   timeline = select_timeline(scored, bursts, scenes, budget, must_haves=must_have_assets)
+   timeline = select_timeline(scored, bursts, scenes, budget)
    ```
 
-5. **Save to project**:
-   ```python
-   from scripts.manage_project import set_candidate_pool, set_timeline, set_state
-   set_candidate_pool(project_id, scored, stories_dir=stories_dir)
-   set_timeline(project_id, timeline, stories_dir=stories_dir)
-   set_state(project_id, "selecting", stories_dir=stories_dir)
-   set_state(project_id, "previewing", stories_dir=stories_dir)
-   ```
-
-6. **Create preview album** and present to user:
-   ```python
-   from scripts.preview import create_preview_album
-   asset_ids = [item["asset_id"] for item in timeline]
-   preview = create_preview_album(session, immich_url, asset_ids, title="Preview: Miami Trip")
-   ```
-   Report to user as plain text (NO markdown wrapping on URLs):
-
-   Here's your selection (15 photos, 3 videos, ~90 seconds):
-   Preview album: http://macmini:2283/share/KEY
-
-   Scenes detected:
-   1. Airport arrival (2 items)
-   2. Speed boat tour (4 items, includes must-have)
-   3. Vizcaya Gardens (3 items, includes must-have)
-   4. Sunset at beach (2 items, includes must-have)
-   5. Dinner (2 items)
-   6. Hotel pool (2 items)
-
-   Say "generate" to create the video, or refine:
+7. **Present timeline and offer refinement**:
    - "replace #3" — swap with an alternate
    - "remove #7" — remove an item
    - "more boat tour photos" — increase scene budget
