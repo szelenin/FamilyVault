@@ -100,17 +100,67 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-006: Smart Scene Discovery (from testing feedback)
+
+**Problem**: Current pipeline combines search and scene detection into one pass. Scenes get missed because: (a) city filter is too narrow (Coconut Grove ≠ Miami in metadata), (b) no way to show ALL detected scenes before applying budget, (c) scene detection algorithm is hardcoded to "trip" mode — doesn't support other prompt types like "how my son grows."
+
+**Requirements**:
+- R027: Two-phase architecture: Phase A (Scene Discovery) shows ALL scenes with no budget limits. Phase B (Selection & Budget) applies after user confirms which scenes matter.
+- R028: Prompt-aware scene detection: "Miami trip" → location+date clustering. "How my son grows" → person+time clustering by age/year. "My dog" → pet detection + life events. AI evaluates the initial prompt and selects the appropriate scene detection algorithm.
+- R029: Broad search that doesn't filter by exact city in metadata — use CLIP semantic search first, then validate location via GPS proximity or city hierarchy (Coconut Grove ⊂ Miami).
+- R030: Must-have keywords from user prompt ("speedboat, vizcaya, sunset walk, passport") must be cross-referenced against detected scenes to ensure all expected scenes appear in the list.
+- R031: Exclude story-engine generated clips (`deviceId=story-engine`) and screenshots from search results automatically.
+
+---
+
+### IMP-007: Timeline Editing UX (absorbs IMP-004 remainder)
+
+**Problem**: Users reference photos by position number (#3) which is fragile and unfriendly. No way to mark photos easily. Preview album gets recreated on every change, losing the share link.
+
+**Requirements**:
+- R032: Combined content referencing — accept any of: position (#3), filename (IMG_7338), time (6:44pm photo), scene+position (photo 3 from Vizcaya), description, or Immich link. AI disambiguates.
+- R033: Update existing preview album instead of recreating — use `PUT /api/albums/{id}/assets` to add and `DELETE /api/albums/{id}/assets` to remove. Share link remains stable.
+- R034: Show rich identifiers in timeline output: position, thumbnail link, time, city, scene name, filename — so user can reference by whichever is easiest.
+- R035: AI notices potential issues (screenshots, low-score items, duplicates) and suggests fixes with specific content references ("IMG_7280 in Scene 4 looks like a screenshot — remove?").
+
+---
+
+### IMP-008: Favorites Priority (from testing feedback)
+
+**Problem**: User has already marked favorite photos in Photos.app/Immich but the selection pipeline ignores them.
+
+**Requirements**:
+- R036: Favorited photos (`isFavorite: true` in Immich) get absolute priority — guaranteed slot in timeline, suggested first within each scene.
+- R037: Cluster of favorited photos helps scene detection — if user starred 5 photos from Vizcaya, that cluster signals "important scene" even before user mentions it.
+- R038: Search pipeline queries `isFavorite: true` as an additional signal alongside CLIP and metadata search.
+
+---
+
+### IMP-009: Screenshot & Garbage Filtering (quick fix)
+
+**Problem**: Screenshots and non-photo content (screen recordings, app exports) slip through despite filename filtering.
+
+**Requirements**:
+- R039: Filter screenshots by multiple signals: filename patterns (Screenshot, IMG_*.PNG from specific apps), resolution aspect ratio (exact screen dimensions like 1170x2532), EXIF make/model (no camera info = likely screenshot).
+- R040: Filter out story-engine generated assets by `deviceId=story-engine`.
+
+---
+
 ## Implementation Order (recommended)
 
-| Priority | Improvement | Rationale |
-|----------|------------|-----------|
-| 1 | **IMP-001**: Smart Selection | Fixes the core problem — bad photo selection |
-| 2 | **IMP-003**: Video Quality | Quick wins — CRF, bitrate, HEIC handling |
-| 3 | **IMP-002**: Visual Preview | Enables user feedback loop before generation |
-| 4 | **IMP-004**: Project File | Foundation for timeline editing, needed for IMP-002 swap feature |
-| 5 | **IMP-005**: Music & Audio | Polish layer, deferred per user request |
+| Priority | Improvement | Status | Rationale |
+|----------|------------|--------|-----------|
+| 1 | **IMP-001**: Smart Selection | DONE (005) | Core problem fixed |
+| 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
+| 3 | **IMP-009**: Screenshot & Garbage Filtering | Not started | Quick fix, high impact |
+| 4 | **IMP-006**: Smart Scene Discovery | Not started | Biggest architectural improvement — two-phase pipeline, prompt-aware detection |
+| 5 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
+| 6 | **IMP-008**: Favorites Priority | Not started | Leverages user curation for better selection |
+| 7 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
+| 8 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
+| 9 | **IMP-005**: Music & Audio | Deferred | Polish layer |
 
-**Note**: IMP-001 and IMP-004 are closely related — the project file (IMP-004) is needed to store candidates and alternates from smart selection (IMP-001). Consider implementing R019 (project file format) as part of IMP-001.
+**Note**: IMP-006 (Scene Discovery) is the biggest single improvement. IMP-009 (Screenshot filter) is a quick win that should go first.
 
 ---
 

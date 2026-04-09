@@ -125,4 +125,6 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Files on `/Volumes/HomeRAID/stories/` (project files, candidate pools) (005-smart-photo-selection)
 
 ## Recent Changes
-- 002-immich-setup: Added Bash (macOS-native, no runtime dependency) + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)
+- 005-smart-photo-selection: Smart photo/video selection pipeline with quality scoring (faces, relevance, diversity, resolution), burst dedup, scene detection, budget allocation, visual preview via Immich albums. Video output quality: CRF 18, 5+ Mbps, 30fps, sips quality 100.
+- 001-ai-story-engine: Full story engine v1 — search, scenario management, music selection, FFmpeg video assembly.
+- 002-immich-setup: Bash + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)
