@@ -8,6 +8,7 @@ from scripts.score_and_select import (
     detect_scenes,
     allocate_budget,
     select_timeline,
+    filter_garbage,
 )
 
 
@@ -30,6 +31,11 @@ def _make_candidate(asset_id="uuid-1", asset_type="IMAGE", taken_at="2026-03-31T
         "relevance_score": relevance_score,
         "city": "Miami",
         "country": "United States",
+        "device_id": "",
+        "exif_make": "Apple",
+        "exif_model": "iPhone 13 Pro",
+        "latitude": 25.7617,
+        "longitude": -80.1918,
     }
 
 
@@ -319,3 +325,124 @@ class TestSelectTimeline:
             assert item["duration"] > 0
             if item["type"] == "VIDEO":
                 assert item["duration"] == 15.0
+
+
+# ---------------------------------------------------------------------------
+# T003: Screenshot filtering tests (US1)
+# ---------------------------------------------------------------------------
+
+class TestFilterScreenshots:
+    def test_filter_screenshot_by_filename(self):
+        """Files with 'Screenshot' in name are filtered."""
+        candidates = [
+            _make_candidate(asset_id="ss1"),
+            _make_candidate(asset_id="ss2"),
+        ]
+        candidates[0]["filename"] = "Screenshot 2024-11-14 at 7.28.36 AM.jpeg"
+        kept, filtered, _ = filter_garbage(candidates)
+        assert len(kept) == 1
+        assert len(filtered) == 1
+        assert filtered[0]["asset_id"] == "ss1"
+
+    def test_filter_screenshot_by_filename_case_insensitive(self):
+        """Screenshot detection is case-insensitive."""
+        c = _make_candidate(asset_id="ss")
+        c["filename"] = "screenshot_2024.png"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+        assert len(filtered) == 1
+
+    def test_filter_screenshot_by_resolution(self):
+        """Images matching known screen dimensions with no EXIF are filtered."""
+        c = _make_candidate(asset_id="screen", width=1170, height=2532)
+        c["exif_make"] = ""
+        c["exif_model"] = ""
+        c["latitude"] = None
+        c["longitude"] = None
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+
+    def test_filter_screenshot_no_exif(self):
+        """PNG with no camera EXIF is filtered."""
+        c = _make_candidate(asset_id="noexif")
+        c["filename"] = "IMG_7280.PNG"
+        c["mime_type"] = "image/png"
+        c["exif_make"] = ""
+        c["exif_model"] = ""
+        c["latitude"] = None
+        c["longitude"] = None
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+
+    def test_filter_keeps_camera_photo_png(self):
+        """PNG with camera EXIF is kept (false positive prevention)."""
+        c = _make_candidate(asset_id="legit_png")
+        c["filename"] = "photo.png"
+        c["mime_type"] = "image/png"
+        c["exif_make"] = "Canon"
+        c["exif_model"] = "EOS R5"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 1
+        assert kept[0]["asset_id"] == "legit_png"
+
+    def test_filter_keeps_photo_with_exif(self):
+        """Normal camera photos are never filtered."""
+        c = _make_candidate(asset_id="normal")
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 1
+        assert len(filtered) == 0
+
+
+# ---------------------------------------------------------------------------
+# T004: Story-engine clip filtering tests (US2)
+# ---------------------------------------------------------------------------
+
+class TestFilterStoryEngine:
+    def test_filter_story_engine_clip(self):
+        """Assets with deviceId=story-engine are filtered."""
+        c = _make_candidate(asset_id="clip", asset_type="VIDEO", duration=37.0)
+        c["device_id"] = "story-engine"
+        c["filename"] = "output.mp4"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+        assert filtered[0]["reason"] == "story_engine"
+
+    def test_filter_keeps_user_video(self):
+        """User-uploaded videos are kept."""
+        c = _make_candidate(asset_id="uservid", asset_type="VIDEO", duration=10.0)
+        c["device_id"] = "Library Import"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 1
+
+
+# ---------------------------------------------------------------------------
+# T010: Non-photo content filtering tests (US3)
+# ---------------------------------------------------------------------------
+
+class TestFilterNonPhoto:
+    def test_filter_camphoto(self):
+        """camphoto_* files are filtered."""
+        c = _make_candidate(asset_id="cam")
+        c["filename"] = "camphoto_959030623.jpg"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+
+    def test_filter_rpreplay(self):
+        """RPReplay_* screen recordings are filtered."""
+        c = _make_candidate(asset_id="rp", asset_type="VIDEO", duration=30.0)
+        c["filename"] = "RPReplay_Final1234.mov"
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 0
+
+    def test_filter_no_metadata_deprioritized(self):
+        """Assets with no GPS, no city, no EXIF, no faces get kept but flagged."""
+        c = _make_candidate(asset_id="poor", face_count=0)
+        c["exif_make"] = ""
+        c["exif_model"] = ""
+        c["latitude"] = None
+        c["longitude"] = None
+        c["city"] = None
+        c["country"] = None
+        # Not hard-excluded, but should be kept (deprioritized via score penalty later)
+        kept, filtered, _ = filter_garbage([c])
+        assert len(kept) == 1  # kept, not excluded

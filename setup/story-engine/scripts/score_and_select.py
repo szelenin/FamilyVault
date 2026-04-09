@@ -14,6 +14,47 @@ DURATION_SWEET_MAX = 30.0
 # Budget cap
 MAX_BUDGET = 60
 # Default photo duration in timeline (seconds)
+
+# Known screen resolutions (width, height) for screenshot detection
+KNOWN_SCREEN_DIMENSIONS = {
+    # iPhone
+    (1170, 2532),  # iPhone 13/13 Pro, 14
+    (2532, 1170),  # landscape
+    (1179, 2556),  # iPhone 14 Pro, 15, 15 Pro
+    (2556, 1179),
+    (1206, 2622),  # iPhone 16 Pro
+    (2622, 1206),
+    (1290, 2796),  # iPhone 14 Pro Max, 15 Pro Max
+    (2796, 1290),
+    (1320, 2868),  # iPhone 16 Pro Max
+    (2868, 1320),
+    (750, 1334),   # iPhone 8, SE
+    (1334, 750),
+    (1125, 2436),  # iPhone X, XS, 11 Pro
+    (2436, 1125),
+    (828, 1792),   # iPhone XR, 11
+    (1792, 828),
+    (1242, 2688),  # iPhone XS Max, 11 Pro Max
+    (2688, 1242),
+    # iPad
+    (1668, 2388),  # iPad Pro 11"
+    (2388, 1668),
+    (2048, 2732),  # iPad Pro 12.9"
+    (2732, 2048),
+    (1640, 2360),  # iPad Air
+    (2360, 1640),
+    (1620, 2160),  # iPad 10th gen
+    (2160, 1620),
+}
+
+# Filename patterns for non-photo content
+GARBAGE_FILENAME_PREFIXES = [
+    "screenshot",
+    "camphoto_",
+    "rpreplay_",
+    "simulator screen shot",
+]
+# Default photo duration in timeline (seconds)
 DEFAULT_PHOTO_DURATION = 4.0
 
 
@@ -68,6 +109,58 @@ def _duration_score(duration):
         return 0.5 + 0.5 * (duration - 2.0) / (DURATION_SWEET_MIN - 2.0)
     # > 30s, decay
     return max(0.3, 1.0 - (duration - DURATION_SWEET_MAX) / 120.0)
+
+
+def filter_garbage(candidates):
+    """Filter out screenshots, story-engine clips, and non-photo content.
+
+    Returns (kept, filtered) where filtered items have a 'reason' field.
+    """
+    kept = []
+    filtered = []
+
+    for c in candidates:
+        filename = (c.get("filename") or "").lower()
+        device_id = c.get("device_id", "")
+        exif_make = c.get("exif_make", "") or ""
+        exif_model = c.get("exif_model", "") or ""
+        has_camera = bool(exif_make or exif_model)
+        width = c.get("width") or 0
+        height = c.get("height") or 0
+        has_gps = c.get("latitude") is not None and c.get("longitude") is not None
+        mime = (c.get("mime_type") or "").lower()
+
+        reason = None
+
+        # 1. Story-engine generated clips
+        if device_id == "story-engine":
+            reason = "story_engine"
+
+        # 2. Filename-based detection
+        elif any(filename.startswith(prefix) for prefix in GARBAGE_FILENAME_PREFIXES):
+            reason = "screenshot_filename" if "screenshot" in filename else "non_photo_filename"
+
+        # 3. Resolution matches known screen + no camera EXIF + no GPS
+        elif (width, height) in KNOWN_SCREEN_DIMENSIONS and not has_camera and not has_gps:
+            reason = "screenshot_resolution"
+
+        # 4. PNG/image with no camera EXIF and no GPS (likely screenshot or app export)
+        elif mime in ("image/png",) and not has_camera and not has_gps:
+            reason = "screenshot_no_exif"
+
+        if reason:
+            c["reason"] = reason
+            filtered.append(c)
+        else:
+            kept.append(c)
+
+    # Build summary
+    summary = {}
+    for f in filtered:
+        r = f.get("reason", "unknown")
+        summary[r] = summary.get(r, 0) + 1
+
+    return kept, filtered, summary
 
 
 def generate_caption(candidate):

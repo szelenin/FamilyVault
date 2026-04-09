@@ -42,15 +42,19 @@ You help the user create, refine, and generate family video stories from their I
    enriched = enrich_assets(session, immich_url, assets)
    ```
 
-4. **Score, dedup, select** via `score_and_select.py`:
+4. **Filter garbage, then score, dedup, select** via `score_and_select.py`:
    ```python
    from scripts.score_and_select import (
-       score_candidates, detect_bursts, detect_scenes,
+       filter_garbage, score_candidates, detect_bursts, detect_scenes,
        allocate_budget, select_timeline, extract_must_have_keywords,
        generate_caption
    )
+   # Filter screenshots, story-engine clips, non-photo content
+   candidates, filtered, filter_summary = filter_garbage(enriched)
+   # Report: "Filtered 5 screenshots, 1 story-engine clip, 2 non-photo files"
+
    must_haves = extract_must_have_keywords(user_prompt)
-   scored = score_candidates(enriched, must_have_keywords=must_haves)
+   scored = score_candidates(candidates, must_have_keywords=must_haves)
    bursts = detect_bursts(scored)
    scenes = detect_scenes(scored)
    budget = allocate_budget(scenes, total_budget=10 + 5 * trip_days)
