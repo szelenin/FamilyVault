@@ -17,6 +17,11 @@ MAX_BUDGET = 60
 DEFAULT_PHOTO_DURATION = 4.0
 
 
+def _aid(candidate):
+    """Get asset_id from candidate, supporting both 'asset_id' and 'id' fields."""
+    return candidate.get("asset_id") or candidate.get("id", "")
+
+
 def _parse_time(ts):
     """Parse ISO 8601 timestamp string to datetime."""
     ts = ts.replace("Z", "+00:00")
@@ -237,11 +242,11 @@ def _finalize_burst_group(groups, members, counter):
         primary = members_sorted[0]
         rest = members_sorted[1:]
 
-    alternates = [m["asset_id"] for m in rest[:3]]
+    alternates = [m.get("asset_id") or m.get("id") for m in rest[:3]]
     timestamps = [m.get("taken_at", "") for m in members]
 
     groups[gid] = {
-        "primary_asset_id": primary["asset_id"],
+        "primary_asset_id": primary.get("asset_id") or primary.get("id"),
         "alternate_asset_ids": alternates,
         "timestamp_range": [min(timestamps), max(timestamps)],
     }
@@ -287,7 +292,7 @@ def _make_scene(members, counter):
         "label": "Scene {}".format(counter + 1),
         "time_range": [min(timestamps), max(timestamps)],
         "candidate_count": len(members),
-        "asset_ids": [m["asset_id"] for m in members],
+        "asset_ids": [_aid(m) for m in members],
     }
 
 
@@ -320,6 +325,14 @@ def allocate_budget(scenes, total_budget, overrides=None):
             alloc[s["id"]] = 1
         return alloc
 
+    # If more scenes than remaining budget, only top scenes get items
+    if len(remaining_scenes) > remaining_budget:
+        # Sort by candidate count descending, only top N scenes get 1 each
+        remaining_scenes.sort(key=lambda s: s["candidate_count"], reverse=True)
+        for i, s in enumerate(remaining_scenes):
+            alloc[s["id"]] = 1 if i < remaining_budget else 0
+        return {k: v for k, v in alloc.items() if v > 0}
+
     for s in remaining_scenes:
         proportion = s["candidate_count"] / total_candidates
         alloc[s["id"]] = max(1, round(proportion * remaining_budget))
@@ -351,7 +364,7 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
     # type: (list, dict, list, dict, Optional[list]) -> list
     """Pick final timeline items respecting budget, diversity, and must-haves."""
     must_haves = must_haves or []
-    must_have_ids = {m["asset_id"] for m in must_haves}
+    must_have_ids = {_aid(m) for m in must_haves}
 
     # Build burst primary set
     burst_primaries = set()
@@ -372,7 +385,7 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
     timeline = []
 
     for mh in must_haves:
-        aid = mh["asset_id"]
+        aid = _aid(mh)
         if aid not in selected_ids:
             selected_ids.add(aid)
             timeline.append(mh)
@@ -385,9 +398,9 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
         # Candidates in this scene, not already selected, not burst alternates
         scene_candidates = [
             c for c in candidates
-            if c["asset_id"] in scene.get("asset_ids", [])
-            and c["asset_id"] not in selected_ids
-            and c["asset_id"] not in burst_non_primaries
+            if _aid(c) in scene.get("asset_ids", [])
+            and _aid(c) not in selected_ids
+            and _aid(c) not in burst_non_primaries
         ]
 
         # Sort by score descending
@@ -398,7 +411,7 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
         remaining = max(0, budget - already_in_scene)
 
         for c in scene_candidates[:remaining]:
-            selected_ids.add(c["asset_id"])
+            selected_ids.add(_aid(c))
             timeline.append(c)
 
     # Enforce diversity: no more than 30% from any single scene
@@ -408,9 +421,9 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
         scene_counts = {}
         filtered = []
         for item in timeline:
-            sid = scene_map.get(item["asset_id"], "")
+            sid = scene_map.get(_aid(item), "")
             scene_counts[sid] = scene_counts.get(sid, 0) + 1
-            if scene_counts[sid] <= max_per_scene or item["asset_id"] in must_have_ids:
+            if scene_counts[sid] <= max_per_scene or _aid(item) in must_have_ids:
                 filtered.append(item)
         timeline = filtered
 
@@ -425,7 +438,7 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
 
         result.append({
             "position": i + 1,
-            "asset_id": item["asset_id"],
+            "asset_id": _aid(item),
             "type": item.get("type", "IMAGE"),
             "caption": item.get("description", ""),
             "taken_at": item.get("taken_at", ""),
@@ -433,7 +446,7 @@ def select_timeline(candidates, burst_groups, scenes, budget_allocation, must_ha
             "trim_start": None if not is_video else 0.0,
             "trim_end": None if not is_video else duration,
             "transition": "crossfade",
-            "scene_id": scene_map.get(item["asset_id"], ""),
+            "scene_id": scene_map.get(_aid(item), ""),
         })
 
     return result

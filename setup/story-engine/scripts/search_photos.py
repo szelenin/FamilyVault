@@ -124,6 +124,7 @@ def parse_asset_response(data: dict, city_hint: Optional[str] = None,
         exif = item.get("exifInfo") or {}
         result.append({
             "id": item.get("id"),
+            "asset_id": item.get("id"),
             "type": item.get("type"),
             "filename": item.get("originalFileName"),
             "mime_type": item.get("originalMimeType"),
