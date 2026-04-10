@@ -102,14 +102,28 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ### IMP-006: Smart Scene Discovery (from testing feedback)
 
-**Problem**: Current pipeline combines search and scene detection into one pass. Scenes get missed because: (a) city filter is too narrow (Coconut Grove ≠ Miami in metadata), (b) no way to show ALL detected scenes before applying budget, (c) scene detection algorithm is hardcoded to "trip" mode — doesn't support other prompt types like "how my son grows."
+**Problem**: Current pipeline combines search and scene detection into one pass. Scenes get missed because: (a) city filter is too narrow (Coconut Grove ≠ Miami in metadata), (b) no way to show ALL detected scenes before applying budget, (c) scene detection algorithm is hardcoded to "trip" mode — doesn't support other prompt types like "how my son grows." Additionally, the search requires hardcoded date ranges — the system can't discover trip dates from a vague prompt like "our Miami trip."
 
-**Requirements**:
+**Status**: Partially implemented (007-smart-scene-discovery). Two-phase architecture, broad CLIP search, scene discovery, must-have verification, and detection modes are done. **Remaining**: intelligent probe-based search (date discovery, location expansion, multi-signal scoring), and bug fixes (must-have extraction, source_query dedup).
+
+**Implemented requirements (done)**:
 - R027: Two-phase architecture: Phase A (Scene Discovery) shows ALL scenes with no budget limits. Phase B (Selection & Budget) applies after user confirms which scenes matter.
-- R028: Prompt-aware scene detection: "Miami trip" → location+date clustering. "How my son grows" → person+time clustering by age/year. "My dog" → pet detection + life events. AI evaluates the initial prompt and selects the appropriate scene detection algorithm.
-- R029: Broad search that doesn't filter by exact city in metadata — use CLIP semantic search first, then validate location via GPS proximity or city hierarchy (Coconut Grove ⊂ Miami).
-- R030: Must-have keywords from user prompt ("speedboat, vizcaya, sunset walk, passport") must be cross-referenced against detected scenes to ensure all expected scenes appear in the list.
-- R031: Exclude story-engine generated clips (`deviceId=story-engine`) and screenshots from search results automatically.
+- R028: Prompt-aware scene detection modes: trip, person-timeline, general. AI evaluates the initial prompt and selects the appropriate detection algorithm.
+- R029: Broad CLIP search without city filter. Metadata search by date range as supplement.
+- R030: Must-have keywords cross-referenced against detected scenes. Missing must-haves reported.
+- R031: Exclude story-engine clips and screenshots automatically (done in IMP-009).
+
+**Remaining requirements (not yet implemented)**:
+- R050: Intelligent probe search — when user provides no date range, the system runs a small CLIP probe search (e.g., "Miami trip", limit 50), analyzes the returned timestamps to discover the trip date cluster, then expands to a full search using the discovered date range.
+- R051: Location discovery via GPS clustering — after broad search, cluster candidate GPS coordinates to discover all trip locations (neighborhoods, landmarks). Use the cluster center + radius to catch unlabeled assets nearby. No hardcoded city lists.
+- R052: Multi-signal confidence scoring — each candidate scored by: CLIP relevance, temporal fit (within discovered trip dates), GPS proximity (near trip cluster center), people presence (trip companions). Combined score determines inclusion.
+- R053: Iterative search expansion — if probe search returns few results, the system automatically tries broader queries, wider date ranges, or different search terms. Reports what it tried.
+- R054: Fix Bug 1 — must-have keyword extraction drops the first keyword in "X, Y, Z must have" pattern when X is preceded by the main prompt sentence.
+- R055: Fix Bug 2 — search_broad() dedup loses source_query for all but the first CLIP query. Track all matching queries per candidate (list, not single string) so must-have verification can check which queries found each asset.
+
+**Known bugs (from E2E testing)**:
+- Bug 1: `extract_must_have_keywords("make a clip of our Miami trip. Speedboat, vizcaya garden, sunset walk must have")` returns `['vizcaya garden', 'sunset walk']` — misses "speedboat" because it's concatenated with the prompt sentence after comma-split.
+- Bug 2: `search_broad(queries=["miami trip", "speedboat", "vizcaya garden"])` tags ALL candidates with `source_query="miami trip"` — the first query finds everything, subsequent queries find only already-seen IDs, so no candidate gets tagged with "speedboat" or "vizcaya garden".
 
 ---
 
