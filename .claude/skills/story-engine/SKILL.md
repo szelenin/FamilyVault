@@ -221,6 +221,9 @@ Use when they fit, skip when they don't. You can also write temporary Python scr
 | `haversine_distance(lat1, lon1, lat2, lon2)` | GPS distance in km |
 | `create_preview_album(session, url, ids, title, old_album_id)` | Create Immich album + share link (use ONLY for initial creation) |
 | `create_project(...)` / `set_discovery(...)` / `set_scene_confirmation(...)` | Project file management |
+| `set_assembly_config(project_id, config)` | Set orientation, resolution, crf, fps, padding in project.json |
+| `build_ffmpeg_cmd_v2(project, output_path, local_paths, ffmpeg_bin)` | Build FFmpeg command from v2 project (supports mixed photo+video) |
+| `detect_format(filename, mime_type)` | Returns "heic", "dng", "jpeg", "png", "video", or "unknown" |
 | Immich API: `PUT /api/albums/{id}/assets` | Add assets to existing album (for updates) |
 | Immich API: `DELETE /api/albums/{id}/assets` | Remove assets from album (for updates) |
 
@@ -242,13 +245,30 @@ After the user approves the timeline:
 
 1. `set_state(project_id, "approved")`
 2. The assembler reads project.json (v2 format) with timeline + assembly_config
-3. `ssh macmini "python3 .../assemble_video.py PROJECT_ID --progress"`
-3. Upload to Immich, add to Story Engine album (`b613c358-175e-4998-85db-cd968e74abf4`)
-4. Create share link and report:
+3. Run assembly (download assets, convert HEIC/DNG, build FFmpeg command, execute)
+4. Upload to Immich, add to Story Engine album (`b613c358-175e-4998-85db-cd968e74abf4`)
+5. Create share link and report:
 
 Video is ready. Find it in Immich under Albums > Story Engine, or open directly:
 http://macmini:2283/share/KEY
 
 Duration: 90s | Size: 45 MB | Quality: 1080p CRF 18
 
+**Re-generating with different orientation** is cheap — just update assembly_config and re-run step 3. No need to re-select photos. The user can say "now make a landscape version for YouTube" and you just:
+```python
+set_assembly_config(project_id, {"orientation": "landscape", "resolution": "1920x1080"})
+# Re-run assembly with same timeline
+```
+
 IMPORTANT: Always output share URLs as bare plain text. Never wrap in ** or ` characters.
+
+## Technical Notes
+
+Things the AI should know when debugging assembly issues:
+
+- **sips format must be lowercase**: `sips -s format jpeg` works, `sips -s format JPEG` fails on macOS 15 with "Can't write format: null"
+- **DNG/RAW files**: sips converts DNG to JPEG fine with `-s format jpeg`. No special handling needed beyond the same conversion as HEIC.
+- **Video audio sync**: Video clips' audio is positioned using `adelay` with xfade offset timing. Each video's audio is placed at its exact timeline position, then all streams are mixed with `amix`. Using `concat` for audio causes drift because xfade shortens video but concat doesn't.
+- **Audio detection**: The assembler enables audio when ANY video clip exists in the timeline (`has_video_clips`), not just when background music is set (`has_music`). Both are independent — a clip can have video audio, music, both, or neither.
+- **Format detection**: `detect_format(filename, mime_type)` returns the type. VIDEO items download as-is (no conversion). HEIC and DNG convert via sips. JPEG/PNG pass through.
+- **Resilience**: If any single item fails to download or convert, the assembler skips it and continues. Never crashes on one bad file.

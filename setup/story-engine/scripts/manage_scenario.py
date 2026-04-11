@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: Use manage_project.py instead. This file is kept only for
+backward compatibility with the old assemble() function in assemble_video.py.
+Will be removed once assemble_v2() fully replaces assemble().
+
 manage-scenario.py — Create and manage story scenarios.
 
 Commands:

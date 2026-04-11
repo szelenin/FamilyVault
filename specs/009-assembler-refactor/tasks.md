@@ -96,9 +96,9 @@
 
 **Purpose**: End-to-end test with real Immich data, SKILL.md update, regression check.
 
-- [ ] T026 Update `tests/story-engine/e2e/test_full_story_flow.py` to use `assemble_v2()` with v2 project.json. Verify output has correct resolution and codec.
-- [ ] T027 E2E test: Run full pipeline against live Immich with mixed HEIC + DNG + video timeline → verify output.mp4 is generated, valid h264, correct resolution.
-- [ ] T028 Run full unit test suite: `pytest tests/story-engine/unit/ -v` — all tests pass, no regressions.
+- [X] T026 Update `tests/story-engine/e2e/test_full_story_flow.py` to use `assemble_v2()` with v2 project.json. Verify output has correct resolution and codec.
+- [X] T027 E2E test: Run full pipeline against live Immich with mixed HEIC + DNG + video timeline → verify output.mp4 is generated, valid h264, correct resolution.
+- [X] T028 Run full unit test suite: `pytest tests/story-engine/unit/ -v` — all tests pass, no regressions.
 
 ---
 
@@ -106,10 +106,10 @@
 
 **Purpose**: Analyze and clean up v1 code.
 
-- [ ] T029 Analyze v1 dependencies: grep for all imports/usages of `manage_scenario` across the codebase. List files that still reference it.
-- [ ] T030 Migrate or remove v1 tests: tests that test manage_scenario.py and old assemble() interface — either migrate to v2 or remove with justification.
-- [ ] T031 If no remaining v1 dependencies: delete `manage_scenario.py`. If dependencies remain: document what still uses it and why.
-- [ ] T032 Commit cleanup with clear message explaining what was removed and why.
+- [X] T029 Analyze v1 dependencies: grep for all imports/usages of `manage_scenario` across the codebase. List files that still reference it.
+- [X] T030 Migrate or remove v1 tests: tests that test manage_scenario.py and old assemble() interface — either migrate to v2 or remove with justification.
+- [X] T031 If no remaining v1 dependencies: delete `manage_scenario.py`. If dependencies remain: document what still uses it and why.
+- [X] T032 Commit cleanup with clear message explaining what was removed and why.
 
 ---
 
