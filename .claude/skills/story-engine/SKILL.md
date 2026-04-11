@@ -228,8 +228,21 @@ Use when they fit, skip when they don't. You can also write temporary Python scr
 
 After the user approves the timeline:
 
+**Before generating, decide the assembly config:**
+- Ask or infer: What's this clip for? Phone, Instagram, YouTube, TV?
+- Set orientation and resolution accordingly:
+  - Phone / Instagram Reels / TikTok → portrait 1080×1920
+  - YouTube / TV → landscape 1920×1080
+  - Instagram post → square 1080×1080
+  - If unclear, check dominant photo orientation and ask
+- Write config: `set_assembly_config(project_id, {"orientation": "portrait", "resolution": "1080x1920"})`
+- Photos are NEVER cropped — the AI decides padding (black, blur, color) per photo
+
+**Generate:**
+
 1. `set_state(project_id, "approved")`
-2. `ssh macmini "python3 .../assemble_video.py PROJECT_ID --progress"`
+2. The assembler reads project.json (v2 format) with timeline + assembly_config
+3. `ssh macmini "python3 .../assemble_video.py PROJECT_ID --progress"`
 3. Upload to Immich, add to Story Engine album (`b613c358-175e-4998-85db-cd968e74abf4`)
 4. Create share link and report:
 
