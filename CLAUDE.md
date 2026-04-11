@@ -123,6 +123,11 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Files on `/Volumes/HomeRAID/stories/` (configurable via `STORIES_DIR` env var) (001-ai-story-engine)
 - Python 3.13 (on Mac Mini) + Bash (Claude Code skills) + Immich REST API v2.6.3, FFmpeg 8+ (via Homebrew), `sips` (macOS native for HEIC), `pytest` 8+ (005-smart-photo-selection)
 - Files on `/Volumes/HomeRAID/stories/` (project files, candidate pools) (005-smart-photo-selection)
+- Python 3.13 (Mac Mini) + Python 3.9 (local tests) + None new — operates on enriched candidate dicts from existing pipeline (006-screenshot-filter)
+- N/A — filter is stateless, operates in-memory (006-screenshot-filter)
+- Python 3.13 (Mac Mini) + Python 3.9 (local tests) + Immich REST API v2.6.3 (search/smart, search/metadata, assets/{id}) (007-smart-scene-discovery)
+- Project files on `/Volumes/HomeRAID/stories/` (007-smart-scene-discovery)
+- Python 3.13 (Mac Mini) for utilities, SKILL.md (natural language) for the AI workflow + Immich REST API v2.6.3, existing utility functions from 005/006/007 (008-intelligent-search)
 
 ## Recent Changes
 - 005-smart-photo-selection: Smart photo/video selection pipeline with quality scoring (faces, relevance, diversity, resolution), burst dedup, scene detection, budget allocation, visual preview via Immich albums. Video output quality: CRF 18, 5+ Mbps, 30fps, sips quality 100.
