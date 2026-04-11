@@ -194,6 +194,24 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-011: GPS Recovery for Shared Library Photos
+
+**Problem**: iCloud Shared Photo Library photos from the non-owner device (e.g., wife's iPhone 15 Pro) lose GPS coordinates when synced. The files exported by osxphotos have camera make/model in EXIF but NO GPS latitude/longitude. Photos.app shows these photos on the map (it has the location in its database), but the exported file EXIF doesn't contain it. This affects 80%+ of trip photos in the library, making GPS-based location discovery nearly useless.
+
+**Root cause**: iCloud Shared Photo Library strips GPS from shared copies. Files with `(1)` or `(2)` suffix in the export are shared copies with missing GPS. Original files (no suffix) retain GPS.
+
+**Evidence from Miami trip**: 16 out of 20 sampled assets had no GPS. All GPS-missing files were iPhone 15 Pro (shared library). All GPS-present files were iPhone 13 Pro (library owner).
+
+**Requirements**:
+- R056: During osxphotos export, use `--exiftool` flag to write Photos.app location data into exported files' EXIF. Photos.app has the GPS (it shows the map), so osxphotos should be able to write it back.
+- R057: If `--exiftool` doesn't recover GPS for shared library photos, implement a post-export script that queries osxphotos Python API for each photo's location and writes it into the file using exiftool.
+- R058: After GPS recovery, re-trigger Immich library scan to re-index the updated EXIF data.
+- R059: Verify GPS recovery by checking a sample of previously GPS-missing assets in Immich after re-scan.
+
+**Priority**: HIGH — this blocks accurate location discovery (IMP-006) and multi-signal scoring (IMP-006 R052). Should be implemented before or alongside IMP-010 metadata sync.
+
+---
+
 ## Implementation Order (recommended)
 
 | Priority | Improvement | Status | Rationale |
@@ -203,8 +221,9 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | Not started | Quick fix, high impact |
 | 4 | **IMP-006**: Smart Scene Discovery | Not started | Biggest architectural improvement — two-phase pipeline, prompt-aware detection |
 | 5 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
-| 6 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. Blocked by iCloud download completion. |
-| 7 | **IMP-008**: Favorites Priority | Not started | Leverages user curation — requires IMP-010 to have favorites in Immich |
+| 6 | **IMP-011**: GPS Recovery | Not started | HIGH PRIORITY — 80% of trip photos have no GPS due to iCloud Shared Library stripping. Blocks location discovery. |
+| 7 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. |
+| 8 | **IMP-008**: Favorites Priority | Not started | Leverages user curation — requires IMP-010 to have favorites in Immich |
 | 8 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
 | 9 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
 | 10 | **IMP-005**: Music & Audio | Deferred | Polish layer |
