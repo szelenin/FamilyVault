@@ -121,9 +121,33 @@ def build_filter_complex(
             prev = out
 
     if has_audio:
-        total = total_duration(durations, fade)
-        audio_f = audio_fade_filter(total, fade)
-        parts.append(f"[{n_inputs}:a]{audio_f}[aout]")
+        if input_types and any(t == "VIDEO" for t in input_types):
+            # Mixed content: VIDEO inputs have audio, IMAGE inputs need silence
+            # Create audio segments for each input, then concatenate
+            audio_parts = []
+            for i in range(n_inputs):
+                dur = durations[i]
+                if input_types[i] == "VIDEO":
+                    # Use video's audio, trim to duration, fade out at end
+                    audio_parts.append(
+                        f"[{i}:a]atrim=duration={dur:.3f},asetpts=PTS-STARTPTS,"
+                        f"afade=t=out:st={max(0, dur-0.5):.3f}:d=0.5[a{i}]"
+                    )
+                else:
+                    # Generate silence for photo duration
+                    audio_parts.append(
+                        f"anullsrc=r=44100:cl=stereo[a{i}_raw];"
+                        f"[a{i}_raw]atrim=duration={dur:.3f}[a{i}]"
+                    )
+            parts.extend(audio_parts)
+            # Concatenate all audio segments
+            concat_inputs = "".join(f"[a{i}]" for i in range(n_inputs))
+            parts.append(f"{concat_inputs}concat=n={n_inputs}:v=0:a=1[aout]")
+        else:
+            # Music only (no video clips)
+            total = total_duration(durations, fade)
+            audio_f = audio_fade_filter(total, fade)
+            parts.append(f"[{n_inputs}:a]{audio_f}[aout]")
 
     return ";".join(parts)
 
@@ -259,7 +283,9 @@ def build_ffmpeg_cmd_v2(
     input_types = [item.get("type", "IMAGE") for item in timeline]
 
     music = project.get("music")
-    has_audio = music is not None and music.get("type") not in (None, "none")
+    has_music = music is not None and music.get("type") not in (None, "none")
+    has_video_clips = any(item.get("type") == "VIDEO" for item in timeline)
+    has_audio = has_music or has_video_clips
 
     cmd = [ffmpeg_bin, "-y"]
 
@@ -272,7 +298,7 @@ def build_ffmpeg_cmd_v2(
                 cmd += ["-to", str(item["trim_end"])]
         cmd += ["-i", path]
 
-    if has_audio:
+    if has_music:
         cmd += ["-i", music["path"]]
 
     # Filter complex
