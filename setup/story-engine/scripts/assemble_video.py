@@ -122,31 +122,41 @@ def build_filter_complex(
 
     if has_audio:
         if input_types and any(t == "VIDEO" for t in input_types):
-            # Mixed content: VIDEO inputs have audio, IMAGE inputs need silence
-            # Create audio segments for each input, then concatenate
-            audio_parts = []
+            # Mixed content: place each video's audio at its correct timeline position
+            # using adelay, then amix all streams together.
+            # Calculate the start time of each item (accounting for xfade overlaps)
+            offsets = xfade_offset(durations, fade) if n_inputs > 1 else []
+            item_starts = [0.0]
+            for i in range(len(offsets)):
+                item_starts.append(offsets[i])
+
+            audio_streams = []
+            total_dur = total_duration(durations, fade)
             for i in range(n_inputs):
-                dur = durations[i]
                 if input_types[i] == "VIDEO":
-                    # Use video's audio, trim to duration, fade out at end
-                    audio_parts.append(
+                    delay_ms = int(item_starts[i] * 1000)
+                    dur = durations[i]
+                    parts.append(
                         f"[{i}:a]atrim=duration={dur:.3f},asetpts=PTS-STARTPTS,"
-                        f"afade=t=out:st={max(0, dur-0.5):.3f}:d=0.5[a{i}]"
+                        f"afade=t=in:d=0.3,afade=t=out:st={max(0, dur-0.5):.3f}:d=0.5,"
+                        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={total_dur:.3f}[a{i}]"
                     )
-                else:
-                    # Generate silence for photo duration
-                    audio_parts.append(
-                        f"anullsrc=r=44100:cl=stereo[a{i}_raw];"
-                        f"[a{i}_raw]atrim=duration={dur:.3f}[a{i}]"
-                    )
-            parts.extend(audio_parts)
-            # Concatenate all audio segments
-            concat_inputs = "".join(f"[a{i}]" for i in range(n_inputs))
-            parts.append(f"{concat_inputs}concat=n={n_inputs}:v=0:a=1[aout]")
+                    audio_streams.append(f"[a{i}]")
+
+            if len(audio_streams) == 1:
+                # Single video — just use its audio
+                parts.append(f"{audio_streams[0]}acopy[aout]")
+            elif len(audio_streams) > 1:
+                # Multiple videos — mix their audio
+                mix_inputs = "".join(audio_streams)
+                parts.append(
+                    f"{mix_inputs}amix=inputs={len(audio_streams)}:"
+                    f"duration=longest:dropout_transition=0[aout]"
+                )
         else:
             # Music only (no video clips)
-            total = total_duration(durations, fade)
-            audio_f = audio_fade_filter(total, fade)
+            total_dur = total_duration(durations, fade)
+            audio_f = audio_fade_filter(total_dur, fade)
             parts.append(f"[{n_inputs}:a]{audio_f}[aout]")
 
     return ";".join(parts)
