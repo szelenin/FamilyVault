@@ -78,9 +78,9 @@
 
 **Purpose**: E2E conversation testing and commit.
 
-- [ ] T013 E2E test: Invoke story-engine skill with "make a clip of our Miami trip" (no dates) → verify AI discovers date range via probe, presents all scenes with preview album link
-- [ ] T014 E2E test: Invoke with "Miami trip. Speedboat, vizcaya garden, sunset walk must have" → verify all 3 must-haves identified in scene list
-- [ ] T015 E2E test: Refinement — respond "skip March 28" then "more speedboat content" → verify AI adjusts scenes
+- [X] T013 E2E test: Invoke story-engine skill with "make a clip of our Miami trip" (no dates) → verify AI discovers date range via probe, presents all scenes with preview album link
+- [X] T014 E2E test: Invoke with "Miami trip. Speedboat, vizcaya garden, sunset walk must have" → verify all 3 must-haves identified in scene list
+- [X] T015 E2E test: Refinement — respond "skip March 28" then "more speedboat content" → verify AI adjusts scenes
 - [X] T016 Run full unit test suite to confirm no regressions: `pytest tests/story-engine/unit/ -v` — all 148 tests pass
 - [X] T017 Commit and push all changes to `008-intelligent-search` branch
 

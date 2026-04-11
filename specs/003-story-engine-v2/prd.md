@@ -238,7 +238,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 1 | **IMP-001**: Smart Selection | DONE (005) | Core problem fixed |
 | 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | DONE (006) | Quick fix, high impact |
-| 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery |
+| 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery, AI-driven budget |
 | 5 | **IMP-012**: Assembler Refactor | Not started | HIGH — v2 project.json support, video clips, DNG handling |
 | 6 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
 | 6 | **IMP-011**: GPS Recovery | Not started | HIGH PRIORITY — 80% of trip photos have no GPS due to iCloud Shared Library stripping. Blocks location discovery. |
