@@ -128,6 +128,7 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Python 3.13 (Mac Mini) + Python 3.9 (local tests) + Immich REST API v2.6.3 (search/smart, search/metadata, assets/{id}) (007-smart-scene-discovery)
 - Project files on `/Volumes/HomeRAID/stories/` (007-smart-scene-discovery)
 - Python 3.13 (Mac Mini) for utilities, SKILL.md (natural language) for the AI workflow + Immich REST API v2.6.3, existing utility functions from 005/006/007 (008-intelligent-search)
+- Python 3.13 (Mac Mini) + Python 3.9 (local tests) + FFmpeg 8+ (HEVC decode, xfade, audio mixing), sips (DNG→JPEG), Immich REST API (009-assembler-refactor)
 
 ## Recent Changes
 - 005-smart-photo-selection: Smart photo/video selection pipeline with quality scoring (faces, relevance, diversity, resolution), burst dedup, scene detection, budget allocation, visual preview via Immich albums. Video output quality: CRF 18, 5+ Mbps, 30fps, sips quality 100.

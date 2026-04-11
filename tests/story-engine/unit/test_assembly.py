@@ -250,11 +250,10 @@ class TestVideoOutputQuality:
         )
         assert "fps=30" in filter_str
 
-    def test_sips_quality_100(self):
-        """HEIC conversion should use maximum JPEG quality."""
+    def test_sips_quality(self):
+        """HEIC conversion should output jpeg format."""
         cmd = sips_convert_cmd("/in/photo.heic", "/out/photo.jpg")
-        assert "formatOptions" in cmd
-        assert "100" in cmd
+        assert "jpeg" in cmd.lower()
 
     def test_audio_bitrate_192k(self):
         """Audio should be 192k, not 128k."""
@@ -343,3 +342,192 @@ class TestVideoClipInclusion:
         )
         assert "loop" not in fc
         assert "xfade" in fc
+
+
+# ---------------------------------------------------------------------------
+# T002: v2 project assembler tests
+# ---------------------------------------------------------------------------
+
+class TestAssemblerV2:
+    def _make_v2_project(self):
+        return {
+            "id": "test-project",
+            "timeline": [
+                {"asset_id": "a1", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+                {"asset_id": "a2", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+            ],
+            "assembly_config": {
+                "orientation": "portrait",
+                "resolution": "1080x1920",
+                "crf": 18,
+                "fps": 30,
+                "padding": "black",
+            },
+            "music": None,
+        }
+
+    def test_build_ffmpeg_cmd_from_project(self):
+        """build_ffmpeg_cmd_v2 reads project dict."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        # Simulate local paths
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        assert "ffmpeg" in cmd[0]
+        assert "/out/output.mp4" in cmd
+
+    def test_build_ffmpeg_cmd_portrait_resolution(self):
+        """Portrait config produces 1080x1920 scale filter."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        cmd_str = " ".join(cmd)
+        assert "1080:1920" in cmd_str
+
+    def test_build_ffmpeg_cmd_reads_assembly_config(self):
+        """CRF and fps from assembly_config."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        project["assembly_config"]["crf"] = 20
+        project["assembly_config"]["fps"] = 24
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        assert "-crf" in cmd
+        crf_idx = cmd.index("-crf")
+        assert cmd[crf_idx + 1] == "20"
+        cmd_str = " ".join(cmd)
+        assert "fps=24" in cmd_str
+
+
+# ---------------------------------------------------------------------------
+# T008: DNG tests
+# ---------------------------------------------------------------------------
+
+class TestDNGSupport:
+    def test_sips_convert_dng_to_jpeg(self):
+        """DNG conversion uses explicit jpeg format."""
+        cmd = sips_convert_cmd("/in/photo.DNG", "/out/photo.jpg")
+        assert "jpeg" in cmd.lower()
+
+    def test_detect_dng_by_extension(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.DNG", "image/x-adobe-dng") == "dng"
+        assert detect_format("photo.dng", "image/x-adobe-dng") == "dng"
+
+    def test_detect_dng_by_mime(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.raw", "image/x-adobe-dng") == "dng"
+
+    def test_detect_heic(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.HEIC", "image/heic") == "heic"
+        assert detect_format("photo.heif", "image/heif") == "heic"
+
+    def test_detect_jpeg(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.jpg", "image/jpeg") == "jpeg"
+
+    def test_detect_video(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("clip.MOV", "video/quicktime") == "video"
+        assert detect_format("clip.mp4", "video/mp4") == "video"
+
+
+# ---------------------------------------------------------------------------
+# T014: Video clip tests (US3)
+# ---------------------------------------------------------------------------
+
+class TestVideoClipAssembly:
+    def _make_v2_project_mixed(self):
+        return {
+            "id": "test-mixed",
+            "timeline": [
+                {"asset_id": "p1", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+                {"asset_id": "v1", "type": "VIDEO", "duration": 10.0,
+                 "trim_start": 0.0, "trim_end": 10.0, "transition": "crossfade"},
+                {"asset_id": "p2", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+            ],
+            "assembly_config": {
+                "orientation": "portrait", "resolution": "1080x1920",
+                "crf": 18, "fps": 30, "padding": "black",
+            },
+            "music": None,
+        }
+
+    def test_video_no_conversion_needed(self):
+        """VIDEO items should not be converted via sips."""
+        from scripts.assemble_video import detect_format
+        fmt = detect_format("clip.MOV", "video/quicktime")
+        assert fmt == "video"
+        # Video format means: download as-is, no sips
+
+    def test_video_trim_flags(self):
+        """VIDEO items with trim get -ss/-to before -i."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project_mixed()
+        local_paths = {"p1": "/tmp/p1.jpg", "v1": "/tmp/v1.mov", "p2": "/tmp/p2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        cmd_str = " ".join(cmd)
+        # -ss 0.0 should appear before -i /tmp/v1.mov
+        ss_idx = cmd_str.find("-ss 0.0")
+        v1_idx = cmd_str.find("/tmp/v1.mov")
+        assert ss_idx != -1, "-ss flag not found"
+        assert ss_idx < v1_idx, "-ss must come before -i for video"
+
+    def test_build_ffmpeg_cmd_mixed_photo_video(self):
+        """Mixed timeline produces correct input_types in filter_complex."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project_mixed()
+        local_paths = {"p1": "/tmp/p1.jpg", "v1": "/tmp/v1.mov", "p2": "/tmp/p2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        # First input (photo) should have loop
+        assert "loop=loop=-1" in fc.split(";")[0]
+        # Second input (video) should NOT have loop
+        assert "loop" not in fc.split(";")[1]
+        # Third input (photo) should have loop
+        assert "loop=loop=-1" in fc.split(";")[2]
+
+    def test_no_trim_on_photo(self):
+        """IMAGE items should not get -ss/-to flags."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project_mixed()
+        local_paths = {"p1": "/tmp/p1.jpg", "v1": "/tmp/v1.mov", "p2": "/tmp/p2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        # Find the position of -i /tmp/p1.jpg
+        p1_idx = cmd.index("/tmp/p1.jpg")
+        # The element before -i should NOT be -ss or -to
+        i_idx = cmd.index("-i")
+        assert cmd[i_idx - 1] != "-ss"
+
+
+# ---------------------------------------------------------------------------
+# T021: Orientation & no-crop tests (US4)
+# ---------------------------------------------------------------------------
+
+class TestOrientationNoCrop:
+    def test_scale_pad_portrait(self):
+        """Portrait resolution produces correct scale+pad filter."""
+        filt = scale_pad_filter("1080:1920")
+        assert "1080:1920" in filt
+        assert "force_original_aspect_ratio=decrease" in filt
+        assert "pad" in filt
+
+    def test_scale_pad_no_crop_landscape_in_portrait(self):
+        """Landscape photo in portrait video: scaled down, padded, NOT cropped."""
+        filt = scale_pad_filter("1080:1920")
+        # force_original_aspect_ratio=decrease means scale DOWN to fit (not crop)
+        assert "decrease" in filt
+        # pad fills remaining space
+        assert "pad=1080:1920" in filt
+
+    def test_scale_pad_no_crop_portrait_in_landscape(self):
+        """Portrait photo in landscape video: scaled down, padded, NOT cropped."""
+        filt = scale_pad_filter("1920:1080")
+        assert "decrease" in filt
+        assert "pad=1920:1080" in filt

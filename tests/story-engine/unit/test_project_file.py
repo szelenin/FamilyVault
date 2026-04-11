@@ -16,6 +16,7 @@ from scripts.manage_project import (
     set_budget,
     set_discovery,
     set_scene_confirmation,
+    set_assembly_config,
     VALID_STATES,
     VALID_TRANSITIONS,
 )
@@ -258,3 +259,46 @@ class TestDiscoveryFields:
         updated = set_scene_confirmation(
             project["id"], {"exclude": ["s2", "s4"]}, stories_dir=temp_stories_dir)
         assert updated["scene_confirmation"]["exclude"] == ["s2", "s4"]
+
+
+# ---------------------------------------------------------------------------
+# T001: Assembly config tests
+# ---------------------------------------------------------------------------
+
+class TestAssemblyConfig:
+    def test_create_project_has_assembly_config(self, temp_stories_dir):
+        project = create_project("Config Test", "test", stories_dir=temp_stories_dir)
+        assert "assembly_config" in project
+        assert project["assembly_config"]["orientation"] == "portrait"
+        assert project["assembly_config"]["resolution"] == "1080x1920"
+        assert project["assembly_config"]["crf"] == 18
+        assert project["assembly_config"]["fps"] == 30
+        assert project["assembly_config"]["padding"] == "black"
+
+    def test_set_assembly_config_orientation(self, temp_stories_dir):
+        project = create_project("Orient Test", "test", stories_dir=temp_stories_dir)
+        updated = set_assembly_config(
+            project["id"],
+            {"orientation": "landscape", "resolution": "1920x1080"},
+            stories_dir=temp_stories_dir,
+        )
+        assert updated["assembly_config"]["orientation"] == "landscape"
+        assert updated["assembly_config"]["resolution"] == "1920x1080"
+
+    def test_set_assembly_config_resolution(self, temp_stories_dir):
+        project = create_project("Res Test", "test", stories_dir=temp_stories_dir)
+        updated = set_assembly_config(
+            project["id"],
+            {"resolution": "1080x1350"},  # Instagram square-ish
+            stories_dir=temp_stories_dir,
+        )
+        assert updated["assembly_config"]["resolution"] == "1080x1350"
+
+    def test_set_assembly_config_padding(self, temp_stories_dir):
+        project = create_project("Pad Test", "test", stories_dir=temp_stories_dir)
+        updated = set_assembly_config(
+            project["id"],
+            {"padding": "blur"},
+            stories_dir=temp_stories_dir,
+        )
+        assert updated["assembly_config"]["padding"] == "blur"
