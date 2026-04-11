@@ -227,6 +227,36 @@ def search_photos(
     return assets
 
 
+def probe_search(
+    immich_url,
+    session,
+    queries,
+    limit=50,
+):
+    """Run a small CLIP search with no date/city filter to discover trip parameters.
+
+    Returns raw assets with timestamps — the AI analyzes them to discover
+    date ranges, location clusters, and trip boundaries.
+    """
+    seen_ids = set()
+    all_assets = []
+    for query in queries:
+        try:
+            body = build_smart_search_request(query=query, limit=limit)
+            body.pop("type", None)
+            resp = session.post(f"{immich_url}/api/search/smart", json=body)
+            resp.raise_for_status()
+            for a in parse_asset_response(resp.json()):
+                aid = a.get("id")
+                if aid and aid not in seen_ids:
+                    seen_ids.add(aid)
+                    a["source_query"] = query
+                    all_assets.append(a)
+        except requests.RequestException:
+            pass
+    return all_assets
+
+
 def search_broad(
     immich_url,
     session,
