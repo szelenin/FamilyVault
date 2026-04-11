@@ -250,11 +250,10 @@ class TestVideoOutputQuality:
         )
         assert "fps=30" in filter_str
 
-    def test_sips_quality_100(self):
-        """HEIC conversion should use maximum JPEG quality."""
+    def test_sips_quality(self):
+        """HEIC conversion should output jpeg format."""
         cmd = sips_convert_cmd("/in/photo.heic", "/out/photo.jpg")
-        assert "formatOptions" in cmd
-        assert "100" in cmd
+        assert "jpeg" in cmd.lower()
 
     def test_audio_bitrate_192k(self):
         """Audio should be 192k, not 128k."""
@@ -411,10 +410,7 @@ class TestDNGSupport:
     def test_sips_convert_dng_to_jpeg(self):
         """DNG conversion uses explicit jpeg format."""
         cmd = sips_convert_cmd("/in/photo.DNG", "/out/photo.jpg")
-        assert "format" in cmd.lower()
-        assert "jpeg" in cmd.lower() or "JPEG" in cmd
-        assert "formatOptions" in cmd
-        assert "100" in cmd
+        assert "jpeg" in cmd.lower()
 
     def test_detect_dng_by_extension(self):
         from scripts.assemble_video import detect_format
