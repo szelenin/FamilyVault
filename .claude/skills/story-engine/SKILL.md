@@ -127,19 +127,42 @@ Use Immich API directly to update the album:
 
 ### Step 8: Phase B — Build Timeline
 
-Apply scoring and budget to confirmed scenes only:
+**Budget is AI-driven, not formula-driven.** You decide how many items each scene gets based on:
+- **User's intent**: must-have scenes get more, filler scenes get less
+- **Scene richness**: a scene with 194 items (Vizcaya) deserves more than a scene with 4 items (lizard catch) — but the lizard scene is a key moment, so give it enough
+- **Content type**: a speedboat scene with 38 videos needs more slots than a quiet morning with 5 photos
+- **Clip duration target**: reason about total clip length. 30 items ≈ 2 min, 50 items ≈ 4 min. Ask yourself: what feels right for this trip?
+- **User's words**: "many photos and videos from Vizcaya" = boost Vizcaya budget. "Restaurants in between" = smaller allocation
+
+Example reasoning for the Miami trip (11 scenes, 353 items):
+```
+"The user emphasized Vizcaya (many photos), speedboat, and the sunset walk.
+Passport is the trip's purpose. Restaurants and lizard are smaller moments.
+I'll target ~40 items for a ~3 min clip:
+  - Vizcaya Gardens: 12 (huge scene, user emphasized it)
+  - Speed boat: 8 (lots of videos, key moment)
+  - Evening walk/dinner: 5 (35 items, user mentioned it)
+  - Passport: 3 (key moment but fewer photos)
+  - Sunset walk: 3 (small but important)
+  - Lizard catch: 2 (small, memorable)
+  - Restaurant Lavka: 3 (user mentioned Ukrainian food)
+  - Morning before passport: 2 (context)
+  - Family group photo: 2 (departure, closure)
+  Total: 40 items"
+```
+
+You can still use `allocate_budget()` as a helper if proportional distribution makes sense, or override it entirely with your own allocation. Then:
 
 ```python
-from scripts.score_and_select import score_candidates, detect_bursts, allocate_budget, select_timeline
+from scripts.score_and_select import score_candidates, detect_bursts, select_timeline
 
 scored = score_candidates(confirmed_candidates)
 bursts = detect_bursts(scored)
-scenes = detect_scenes(scored)
-budget = allocate_budget(scenes, total_budget=10 + 5 * trip_days)
-timeline = select_timeline(scored, bursts, scenes, budget)
+# Use your AI-determined budget, not the formula
+timeline = select_timeline(scored, bursts, scenes, your_budget_dict)
 ```
 
-Tell the user: "Built timeline: X photos, Y videos, ~Z seconds. Budget: N items across M scenes." Offer refinement before generating.
+Tell the user your reasoning: "Built timeline: 40 items (~3 min). Vizcaya 12, Speedboat 8, Evening walk 5..." Offer refinement before generating.
 
 ## Conversational Refinement
 
