@@ -12,6 +12,7 @@ from scripts.score_and_select import (
     discover_scenes,
     verify_must_haves,
     detect_mode_from_prompt,
+    extract_must_have_keywords,
 )
 
 
@@ -608,3 +609,41 @@ class TestDetectMode:
         """Unrecognized prompts default to general mode."""
         assert detect_mode_from_prompt("make a clip") == "general"
         assert detect_mode_from_prompt("something cool") == "general"
+
+
+# ---------------------------------------------------------------------------
+# R054: Bug fix — must-have keyword extraction
+# ---------------------------------------------------------------------------
+
+class TestExtractMustHaveKeywordsFix:
+    def test_extracts_all_comma_separated_before_must_have(self):
+        """'Speedboat, vizcaya garden, sunset walk must have' extracts all 3."""
+        result = extract_must_have_keywords(
+            "make a clip of our Miami trip. Speedboat, vizcaya garden, sunset walk must have"
+        )
+        assert "speedboat" in result
+        assert "vizcaya garden" in result
+        assert "sunset walk" in result
+        assert len(result) == 3
+
+    def test_extracts_single_keyword(self):
+        result = extract_must_have_keywords("miami trip. speedboat must have")
+        assert result == ["speedboat"]
+
+    def test_extracts_must_include(self):
+        result = extract_must_have_keywords("make a clip. must include sunset, boat, garden")
+        assert "sunset" in result
+        assert "boat" in result
+        assert "garden" in result
+
+    def test_no_must_have_returns_empty(self):
+        result = extract_must_have_keywords("make a clip of our Miami trip")
+        assert result == []
+
+    def test_extracts_with_period_before_keywords(self):
+        """Period separates prompt from keywords."""
+        result = extract_must_have_keywords(
+            "Build a clip of our recent trip to Miami. Speed boat, viscaya garden, sunset must have"
+        )
+        assert len(result) == 3
+        assert "speed boat" in result

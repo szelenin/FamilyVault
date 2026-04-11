@@ -193,18 +193,20 @@ def extract_must_have_keywords(prompt):
     import re
     prompt_lower = prompt.lower()
 
-    # Pattern: "X, Y, Z must have" or "must have X, Y, Z"
+    # Pattern: "X, Y, Z must have"
     match = re.search(r'(.+?)\s+must\s+have', prompt_lower)
     if match:
-        # Extract the part before "must have" and split by comma
         before = match.group(1)
-        # Take only the comma-separated tail
-        parts = [p.strip() for p in before.split(",")]
-        # Filter out parts that look like the main query (> 5 words)
+        # Split on period or sentence boundary first — keywords are after the last period
+        sentences = before.split(".")
+        keyword_part = sentences[-1].strip()  # take last sentence fragment
+        # Split by comma
+        parts = [p.strip() for p in keyword_part.split(",")]
         keywords = [p for p in parts if p and len(p.split()) <= 4]
         if keywords:
             return keywords
 
+    # Pattern: "must have/include X, Y, Z"
     match = re.search(r'must\s+(?:have|include)\s+(.+)', prompt_lower)
     if match:
         after = match.group(1)
@@ -513,9 +515,15 @@ def verify_must_haves(keywords, discovery_scenes, candidates):
                 cid = _aid(c)
                 if cid not in scene.get("asset_ids", []):
                     continue
-                # Check source_query
+                # Check source_query and matched_queries
                 if kw_lower in (c.get("source_query") or "").lower():
                     matched_scene = scene
+                    break
+                for mq in (c.get("matched_queries") or []):
+                    if kw_lower in mq.lower():
+                        matched_scene = scene
+                        break
+                if matched_scene:
                     break
                 # Check city
                 if kw_lower in (c.get("city") or "").lower():

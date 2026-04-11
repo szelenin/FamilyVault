@@ -269,7 +269,15 @@ def search_broad(
                     if aid and aid not in seen_ids:
                         seen_ids.add(aid)
                         a["source_query"] = query
+                        a["matched_queries"] = [query]
                         all_assets.append(a)
+                    elif aid in seen_ids:
+                        # Already seen — append this query to matched_queries
+                        for existing in all_assets:
+                            if existing.get("id") == aid:
+                                if query not in existing.get("matched_queries", []):
+                                    existing.setdefault("matched_queries", []).append(query)
+                                break
                 break
             except requests.RequestException:
                 import time
