@@ -11,6 +11,8 @@ The AI creates scenes and presents them to the user via text. The user needs to 
 
 **Solution**: A lightweight SvelteKit PWA hosted on the Mac Mini that talks to Immich API and reads/writes project.json. The user gets a link from Claude, opens it, curates their scenes, and tells Claude "done."
 
+**Scope**: This is Screen 1 (Selection) only — browse scenes, select/deselect, star priorities. Screen 2 (Timeline Review — notes, tags, voice annotations, trim, speed, reorder) is a separate improvement (IMP-013).
+
 ## Architecture
 
 ```
@@ -77,9 +79,9 @@ The user can tap a photo to see it full-screen (loaded from Immich). This helps 
 
 ---
 
-### User Story 4 — Scene Management (Priority: P3)
+### User Story 4 — Scene Management (Priority: P2)
 
-The user can include/exclude entire scenes from the scene list view, and reorder scenes.
+The user can include/exclude entire scenes from the scene list view.
 
 **Why this priority**: The user might decide to skip an entire scene ("skip the airport photos"). This is faster than deselecting items one by one.
 
@@ -87,6 +89,19 @@ The user can include/exclude entire scenes from the scene list view, and reorder
 
 1. **Given** the scene list, **When** the user swipes a scene or taps an exclude button, **Then** the entire scene is marked as excluded and visually dimmed.
 2. **Given** an excluded scene, **When** the user taps it again, **Then** it's re-included.
+
+---
+
+### User Story 5 — Quick Star/Priority (Priority: P3)
+
+The user can mark specific items as "must include" (star) to tell the AI these are the most important shots.
+
+**Why this priority**: Simple signal that helps AI prioritize without needing detailed notes. Notes/tags/trimming are deferred to Screen 2 (separate improvement).
+
+**Acceptance Scenarios**:
+
+1. **Given** a photo in the scene grid, **When** the user long-presses or taps a star icon, **Then** the photo is marked as priority (starred).
+2. **Given** starred items, **When** Claude builds the timeline, **Then** starred items get guaranteed slots regardless of budget.
 
 ---
 

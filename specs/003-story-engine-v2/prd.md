@@ -231,6 +231,22 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-013: Timeline Review Screen (Screen 2)
+
+**Problem**: After selecting content in Screen 1, the user needs a way to review the AI's arrangement, add notes/tags, trim videos, adjust speed, and provide detailed instructions per item. This is too detailed for the scene selection grid (Screen 1) and too complex for Claude's text interface.
+
+**Requirements**:
+- R067: Screen 2 shows only SELECTED items from Screen 1, arranged in timeline order.
+- R068: Per-item controls: voice note, text note, star/priority, custom tags.
+- R069: Video-specific: trim start/end, speed adjustment (slow-mo, fast), keep/mute audio.
+- R070: AI interprets annotations to build the final video — notes become instructions ("hero shot" → longer duration, "slow-mo" → speed reduction).
+- R071: User can reorder items by drag-and-drop.
+- R072: Optional — skip Screen 2 entirely and go straight to generate from Screen 1.
+
+**Depends on**: IMP-007 (Screen 1 must be working first).
+
+---
+
 ## Implementation Order (recommended)
 
 | Priority | Improvement | Status | Rationale |
