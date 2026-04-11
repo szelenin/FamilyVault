@@ -212,15 +212,33 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-012: Assembler Refactor (v2 pipeline)
+
+**Problem**: The video assembler (`assemble_video.py`) still uses the v1 `scenario.json` format and `manage_scenario.py`. It doesn't support: (a) the v2 `project.json` format, (b) video clips in the timeline (treats everything as still images), (c) DNG/RAW files (sips conversion produces corrupt TIFF). This requires a manual bridge (create v1 scenario from v2 project) and excludes all videos and DNG files from the output.
+
+**Evidence**: Miami trip generation failed — 15 DNG files couldn't be decoded by FFmpeg ("Tiled TIFF not allowed"), 7 videos were treated as photos (loop filter on first frame only).
+
+**Requirements**:
+- R060: Assembler MUST read from `project.json` (v2 format) directly, not `scenario.json`.
+- R061: Assembler MUST handle VIDEO timeline items — download original video, apply trim_start/trim_end, include with original audio. Photo-to-video and video-to-photo crossfade transitions.
+- R062: Assembler MUST handle DNG/RAW files — convert to JPEG via `sips` with explicit output format, or use ImageMagick as fallback.
+- R063: Remove dependency on `manage_scenario.py` — the v1 scenario system is deprecated.
+- R064: Each timeline item's `type` field (IMAGE/VIDEO) determines how FFmpeg processes it — no more treating everything as still images.
+
+**Priority**: HIGH — blocks video generation with the new v2 pipeline.
+
+---
+
 ## Implementation Order (recommended)
 
 | Priority | Improvement | Status | Rationale |
 |----------|------------|--------|-----------|
 | 1 | **IMP-001**: Smart Selection | DONE (005) | Core problem fixed |
 | 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
-| 3 | **IMP-009**: Screenshot & Garbage Filtering | Not started | Quick fix, high impact |
-| 4 | **IMP-006**: Smart Scene Discovery | Not started | Biggest architectural improvement — two-phase pipeline, prompt-aware detection |
-| 5 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
+| 3 | **IMP-009**: Screenshot & Garbage Filtering | DONE (006) | Quick fix, high impact |
+| 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery |
+| 5 | **IMP-012**: Assembler Refactor | Not started | HIGH — v2 project.json support, video clips, DNG handling |
+| 6 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
 | 6 | **IMP-011**: GPS Recovery | Not started | HIGH PRIORITY — 80% of trip photos have no GPS due to iCloud Shared Library stripping. Blocks location discovery. |
 | 7 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. |
 | 8 | **IMP-008**: Favorites Priority | Not started | Leverages user curation — requires IMP-010 to have favorites in Immich |
