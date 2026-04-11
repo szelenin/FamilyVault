@@ -224,6 +224,8 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 - R062: Assembler MUST handle DNG/RAW files — convert to JPEG via `sips` with explicit output format, or use ImageMagick as fallback.
 - R063: Remove dependency on `manage_scenario.py` — the v1 scenario system is deprecated.
 - R064: Each timeline item's `type` field (IMAGE/VIDEO) determines how FFmpeg processes it — no more treating everything as still images.
+- R065: Auto-detect dominant photo orientation (portrait vs landscape) and set video output orientation accordingly. If most photos are portrait → output portrait video (1080×1920) for phone viewing. If mixed → ask user.
+- R066: NEVER crop photos. Preserve the full original content of every photo. The user must see everything that was in the original photo — no edges cut off. Clarifying questions about aspect ratio handling to be asked during spec phase.
 
 **Priority**: HIGH — blocks video generation with the new v2 pipeline.
 
