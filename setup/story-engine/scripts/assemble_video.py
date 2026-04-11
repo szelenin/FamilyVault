@@ -137,8 +137,29 @@ def detect_heic(mime_type: str) -> bool:
     return mime_type.lower() in ("image/heic", "image/heif")
 
 
+def detect_format(filename: str, mime_type: str = "") -> str:
+    """Detect file format from filename and mime type.
+
+    Returns: "heic", "dng", "jpeg", "png", "video", or "unknown".
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    mime = mime_type.lower()
+
+    if ext in ("mov", "mp4", "m4v", "avi") or mime.startswith("video/"):
+        return "video"
+    if ext in ("heic", "heif") or mime in ("image/heic", "image/heif"):
+        return "heic"
+    if ext == "dng" or mime == "image/x-adobe-dng":
+        return "dng"
+    if ext == "png" or mime == "image/png":
+        return "png"
+    if ext in ("jpg", "jpeg") or mime == "image/jpeg":
+        return "jpeg"
+    return "unknown"
+
+
 def sips_convert_cmd(src: str, dst: str) -> str:
-    """Return sips shell command to convert HEIC to JPEG."""
+    """Return sips shell command to convert HEIC/DNG to JPEG at max quality."""
     return f"sips -s format JPEG -s formatOptions 100 '{src}' --out '{dst}'"
 
 
@@ -199,6 +220,85 @@ def build_ffmpeg_cmd(
         "-c:v", "libx264",
         "-preset", "medium",
         "-crf", "18",
+        "-maxrate", "10M",
+        "-bufsize", "20M",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        "-t", str(total_duration(durations, fade_duration)),
+    ]
+    if has_audio:
+        cmd += ["-c:a", "aac", "-b:a", "192k"]
+
+    cmd.append(output_path)
+    return cmd
+
+
+def build_ffmpeg_cmd_v2(
+    project: dict,
+    output_path: str,
+    local_paths: dict,
+    ffmpeg_bin: str,
+) -> List[str]:
+    """Build FFmpeg command for v2 project format.
+
+    Args:
+        project: v2 project dict with timeline and assembly_config.
+        output_path: Path for output.mp4.
+        local_paths: Dict mapping asset_id → local file path.
+        ffmpeg_bin: Path to ffmpeg binary.
+    """
+    timeline = project["timeline"]
+    config = project.get("assembly_config", {})
+    resolution = config.get("resolution", "1080x1920").replace("x", ":")
+    crf = str(config.get("crf", 18))
+    fps = config.get("fps", 30)
+    fade_duration = 1.0
+
+    n = len(timeline)
+    durations = [float(item.get("duration", 4.0)) for item in timeline]
+    input_types = [item.get("type", "IMAGE") for item in timeline]
+
+    music = project.get("music")
+    has_audio = music is not None and music.get("type") not in (None, "none")
+
+    cmd = [ffmpeg_bin, "-y"]
+
+    # Inputs
+    for item in timeline:
+        path = local_paths.get(item["asset_id"], item["asset_id"])
+        if item.get("type") == "VIDEO" and item.get("trim_start") is not None:
+            cmd += ["-ss", str(item["trim_start"])]
+            if item.get("trim_end") is not None:
+                cmd += ["-to", str(item["trim_end"])]
+        cmd += ["-i", path]
+
+    if has_audio:
+        cmd += ["-i", music["path"]]
+
+    # Filter complex
+    # Override fps in filter_complex by replacing in the output
+    fc = build_filter_complex(
+        n_inputs=n,
+        durations=durations,
+        fade=fade_duration,
+        resolution=resolution,
+        transition="fade",
+        has_audio=has_audio,
+        input_types=input_types,
+    )
+    # Apply custom fps from config
+    if fps != 30:
+        fc = fc.replace("fps=30", "fps={}".format(fps))
+    cmd += ["-filter_complex", fc]
+
+    cmd += ["-map", "[vout]"]
+    if has_audio:
+        cmd += ["-map", "[aout]"]
+
+    cmd += [
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", crf,
         "-maxrate", "10M",
         "-bufsize", "20M",
         "-pix_fmt", "yuv420p",

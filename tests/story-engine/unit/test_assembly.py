@@ -343,3 +343,98 @@ class TestVideoClipInclusion:
         )
         assert "loop" not in fc
         assert "xfade" in fc
+
+
+# ---------------------------------------------------------------------------
+# T002: v2 project assembler tests
+# ---------------------------------------------------------------------------
+
+class TestAssemblerV2:
+    def _make_v2_project(self):
+        return {
+            "id": "test-project",
+            "timeline": [
+                {"asset_id": "a1", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+                {"asset_id": "a2", "type": "IMAGE", "duration": 4.0,
+                 "trim_start": None, "trim_end": None, "transition": "crossfade"},
+            ],
+            "assembly_config": {
+                "orientation": "portrait",
+                "resolution": "1080x1920",
+                "crf": 18,
+                "fps": 30,
+                "padding": "black",
+            },
+            "music": None,
+        }
+
+    def test_build_ffmpeg_cmd_from_project(self):
+        """build_ffmpeg_cmd_v2 reads project dict."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        # Simulate local paths
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        assert "ffmpeg" in cmd[0]
+        assert "/out/output.mp4" in cmd
+
+    def test_build_ffmpeg_cmd_portrait_resolution(self):
+        """Portrait config produces 1080x1920 scale filter."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        cmd_str = " ".join(cmd)
+        assert "1080:1920" in cmd_str
+
+    def test_build_ffmpeg_cmd_reads_assembly_config(self):
+        """CRF and fps from assembly_config."""
+        from scripts.assemble_video import build_ffmpeg_cmd_v2
+        project = self._make_v2_project()
+        project["assembly_config"]["crf"] = 20
+        project["assembly_config"]["fps"] = 24
+        local_paths = {"a1": "/tmp/a1.jpg", "a2": "/tmp/a2.jpg"}
+        cmd = build_ffmpeg_cmd_v2(project, "/out/output.mp4", local_paths, "ffmpeg")
+        assert "-crf" in cmd
+        crf_idx = cmd.index("-crf")
+        assert cmd[crf_idx + 1] == "20"
+        cmd_str = " ".join(cmd)
+        assert "fps=24" in cmd_str
+
+
+# ---------------------------------------------------------------------------
+# T008: DNG tests
+# ---------------------------------------------------------------------------
+
+class TestDNGSupport:
+    def test_sips_convert_dng_to_jpeg(self):
+        """DNG conversion uses explicit jpeg format."""
+        cmd = sips_convert_cmd("/in/photo.DNG", "/out/photo.jpg")
+        assert "format" in cmd.lower()
+        assert "jpeg" in cmd.lower() or "JPEG" in cmd
+        assert "formatOptions" in cmd
+        assert "100" in cmd
+
+    def test_detect_dng_by_extension(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.DNG", "image/x-adobe-dng") == "dng"
+        assert detect_format("photo.dng", "image/x-adobe-dng") == "dng"
+
+    def test_detect_dng_by_mime(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.raw", "image/x-adobe-dng") == "dng"
+
+    def test_detect_heic(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.HEIC", "image/heic") == "heic"
+        assert detect_format("photo.heif", "image/heif") == "heic"
+
+    def test_detect_jpeg(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("photo.jpg", "image/jpeg") == "jpeg"
+
+    def test_detect_video(self):
+        from scripts.assemble_video import detect_format
+        assert detect_format("clip.MOV", "video/quicktime") == "video"
+        assert detect_format("clip.mp4", "video/mp4") == "video"

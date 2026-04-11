@@ -77,6 +77,13 @@ def create_project(title, request, search_params=None, stories_dir=None):
             "preview": {"album_id": None, "share_key": None},
         },
         "scene_confirmation": None,
+        "assembly_config": {
+            "orientation": "portrait",
+            "resolution": "1080x1920",
+            "crf": 18,
+            "fps": 30,
+            "padding": "black",
+        },
         "music": None,
         "preview": {"album_id": None, "share_key": None},
         "created_at": now,
@@ -239,5 +246,18 @@ def set_scene_confirmation(project_id, confirmation, stories_dir=None):
         stories_dir = _default_stories_dir()
     project = _load(project_id, stories_dir)
     project["scene_confirmation"] = confirmation
+    _save(project, stories_dir)
+    return project
+
+
+def set_assembly_config(project_id, config, stories_dir=None):
+    # type: (str, dict, Optional[str]) -> dict
+    """Update assembly config fields. Merges with existing config."""
+    if stories_dir is None:
+        stories_dir = _default_stories_dir()
+    project = _load(project_id, stories_dir)
+    if "assembly_config" not in project:
+        project["assembly_config"] = {}
+    project["assembly_config"].update(config)
     _save(project, stories_dir)
     return project
