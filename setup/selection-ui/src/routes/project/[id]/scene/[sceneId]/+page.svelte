@@ -7,6 +7,11 @@
   let detailIndex = $state(-1);
 
   const selectedCount = $derived(items.filter(i => i.selected).length);
+  const visibleItems = $derived(
+    activeFilter === "photos" ? items.filter(i => i.type === "IMAGE") :
+    activeFilter === "videos" ? items.filter(i => i.type === "VIDEO") :
+    items
+  );
 
   async function toggleItem(assetId: string, e: Event) {
     e.stopPropagation();
@@ -115,7 +120,7 @@
 
 <!-- Thumbnail grid -->
 <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
-  {#each items as item, i}
+  {#each visibleItems as item, i}
     <div class="relative aspect-square cursor-pointer group"
          onclick={() => openDetail(i)}>
       <img src="/api/thumbnail/{item.asset_id}"
