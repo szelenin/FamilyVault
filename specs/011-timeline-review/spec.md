@@ -14,38 +14,37 @@
 
 ## Context
 
-After the user selects photos/videos in Screen 1 (310+ items narrowed to ~40-50 by AI budget), they need a way to:
-- Review the AI's timeline arrangement
-- Add context that only they know — stories, memories, emotions
-- The AI uses these notes to transform a slideshow into a story
+After the user selects photos/videos in Screen 1, they need a way to add stories and context to their moments. Traditional editors (Premiere, CapCut) show individual items on a timeline — too complex for regular users. We do the opposite: the user tells STORIES about MOMENTS, the AI translates that into individual photo durations, transitions, and effects.
 
-Screen 1 is for fast scanning and picking. Screen 2 is for storytelling.
+**Screen 2 shows scenes/moments, not individual photos.** The user adds a story to "the speedboat moment" — not to "photo #17." The AI decides which photos, how long, what transitions.
+
+**After annotation, the AI generates a quick 480p preview.** The user watches and gives feedback in conversation. The AI adjusts and generates the final HD version.
 
 **This is a new page in the existing Selection UI** (SvelteKit app at `http://macmini:3000`).
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — Review & Annotate (Priority: P1)
+### User Story 1 — Scene-Level Storytelling (Priority: P1)
 
-After the AI builds a timeline from the user's selection, the user opens Screen 2 to review items in order. They can add a voice note or text note to any item. Most items get no notes — only the 5-10 with a story worth telling.
+Screen 2 shows the user's trip as a list of MOMENTS/SCENES — not individual photos. Each scene shows a thumbnail strip, the AI's plan for that section, and a place to add a story. The user adds context to the moments that matter.
 
-**Why this priority**: Notes are the core differentiator — they turn "photos in order" into "a story with meaning." Without notes, the AI just makes a slideshow.
+**Why this priority**: Users think in moments ("the speedboat tour", "waiting for the passport"), not individual photos. Scene-level stories are natural and fast — 10 scenes to review, not 50 photos.
 
-**Independent Test**: Open timeline → see items in order → tap an item → type "we were waiting for the passport" → save → verify note persisted in project.json.
+**Independent Test**: Open Screen 2 → see 10 scenes → tap "Add your story" on the speedboat scene → type "highlight of the trip!" → save → verify in project.json.
 
 **Acceptance Scenarios**:
 
-1. **Given** the AI built a 45-item timeline, **When** the user opens Screen 2, **Then** they see a vertical scrollable list of items in timeline order with: thumbnail, position number, scene label, and duration.
+1. **Given** the user's selection spans 10 scenes, **When** they open Screen 2, **Then** they see a vertical list of scenes with: thumbnail strip (first 5 photos), scene label, item count, estimated duration, and the AI's plan for that section.
 
-2. **Given** an item in the timeline, **When** the user taps it, **Then** an annotation panel opens with: larger preview, text input field, voice record button, and current note (if any).
+2. **Given** a scene, **When** the user taps "Add your story", **Then** a text field opens where they type their memory/context. Mobile keyboard mic handles voice-to-text.
 
-3. **Given** the user types "we were waiting for the passport appointment" on a photo, **When** they close the panel, **Then** the note is saved to project.json and a small note icon appears on the item's thumbnail.
+3. **Given** the user types "We waited 2 hours for the passport appointment, kid was bored then super excited when it was done", **When** they save, **Then** the note is stored in project.json per scene_id and a story icon appears on the scene card.
 
-4. **Given** the user taps the voice record button, **When** they speak, **Then** the audio is transcribed to text (speech-to-text) and saved as the note. The original audio is NOT stored — only the transcription.
+4. **Given** a scene the user doesn't want, **When** they tap remove, **Then** the scene disappears with undo toast. All its items go to deselected_ids.
 
-5. **Given** an item in the timeline the user doesn't want, **When** they swipe or tap a remove button, **Then** the item is removed from the timeline and added to deselected_ids. The list renumbers. Undo toast for 5 seconds.
+5. **Given** 10 scenes, **When** the user adds stories to 3 and removes 1, **Then** Claude reads the 9 remaining scenes with stories from project.json.
 
-6. **Given** 45 items in the timeline, **When** the user adds notes to 5 of them and removes 3, **Then** Claude reads the final 42 items with notes from project.json.
+6. **Given** a scene card, **When** the user taps the thumbnail strip, **Then** it expands to show all photos/videos in that scene for quick review (not editing — just viewing).
 
 ---
 
@@ -71,19 +70,32 @@ The AI reads the user's notes and adjusts the video generation: pacing, captions
 
 ---
 
-### User Story 3 — Video Controls (Priority: P2)
+### User Story 3 — Scene Reorder + Remove (Priority: P2)
 
-The user can trim video clips, adjust speed, mute audio, and reorder items in the timeline.
+The user can reorder scenes and remove scenes they don't want.
 
-**Why this priority**: Fine-tuning. Most users skip this — the AI's default arrangement is good enough. Power users who want control get it here.
-
-**Independent Test**: Drag item #5 to position #2 → verify order updated. Trim video to 5 seconds → verify in project.json.
+**Why this priority**: The AI orders scenes chronologically by default, which is usually right. But the user might want to rearrange for storytelling ("end with the sunset, not the airport").
 
 **Acceptance Scenarios**:
 
-1. **Given** a video clip showing 15 seconds, **When** the user sets trim to 3s-8s, **Then** only that 5-second segment is used in the clip.
-2. **Given** the timeline, **When** the user drags item #5 to position #2, **Then** the order updates and persists.
-3. **Given** a video with audio, **When** the user taps "mute", **Then** that clip's audio is silent in the generated video.
+1. **Given** the scene list, **When** the user drags a scene to a different position, **Then** the order updates and persists.
+2. **Given** a scene, **When** the user taps remove, **Then** undo toast, scene disappears, items go to deselected_ids.
+
+---
+
+### User Story 5 — Quick Preview (Priority: P1, Phase 2)
+
+After the user adds stories, the AI generates a quick low-quality preview (480p, fast encoding). The user watches it and gives feedback in conversation. The AI adjusts and generates the final HD version.
+
+**Why this priority**: Users need to SEE the result, not imagine it from a plan. A 30-second preview at 480p can be generated in under a minute. This is the fastest feedback loop.
+
+**Note**: This is Phase 2 of this improvement — implement after Scene-Level Storytelling works.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user tells Claude "ready for preview", **When** the AI generates, **Then** it creates a 480p fast-encoded preview video in under 60 seconds.
+2. **Given** the user watches the preview, **When** they say "make speedboat longer", **Then** the AI adjusts and regenerates the preview.
+3. **Given** the user is happy with the preview, **When** they say "looks good, generate final", **Then** the AI generates the full HD version.
 
 ---
 
@@ -122,22 +134,23 @@ Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the curr
 ### Functional Requirements
 
 - **FR-001**: Screen 2 accessible at `/project/{id}/timeline` in the Selection UI app.
-- **FR-002**: Shows selected items in timeline order as a vertical scrollable list.
-- **FR-003**: Each item shows: thumbnail, position, scene label, duration, note indicator (if note exists).
-- **FR-004**: Tap item opens annotation panel: larger preview, text input field. Mobile keyboard's built-in mic handles speech-to-text natively.
-- **FR-005**: Notes stored in project.json as `"notes": {"asset_id": "text..."}` dict.
-- **FR-007**: AI reads notes during video generation and adjusts pacing, captions, transitions.
-- **FR-008**: Video trim controls: start/end sliders or time inputs.
-- **FR-009**: Drag-and-drop reorder of timeline items.
-- **FR-010**: Mute toggle per video clip.
+- **FR-002**: Shows SCENES (not individual items) as a vertical scrollable list.
+- **FR-003**: Each scene card shows: thumbnail strip (first 5 items), scene label, item count, estimated duration, AI's plan for that section, story indicator.
+- **FR-004**: Tap "Add your story" opens text field. Mobile keyboard mic handles voice-to-text.
+- **FR-005**: Stories stored in project.json as `"scene_notes": {"scene_id": "text..."}` dict.
+- **FR-006**: AI reads scene notes during video generation and adjusts pacing, captions, transitions per scene.
+- **FR-007**: Tap thumbnail strip expands to show all items in that scene (view only).
+- **FR-008**: Drag-and-drop reorder of scenes.
+- **FR-009**: Remove scene with undo toast (items go to deselected_ids).
+- **FR-010**: Works on mobile (touch-friendly, responsive).
 - **FR-011**: Sticky summary bar on both screens: selected count, estimated duration, link to the other screen. No generate button — AI guides generation through conversation.
-- **FR-012**: Works on mobile (touch-friendly, responsive).
+- **FR-012**: Quick preview: AI generates 480p fast-encoded preview for user feedback before final HD. (Phase 2)
 
 ### Key Entities
 
-- **Annotation**: Text note associated with an asset_id. Stored in project.json `notes` dict.
-- **Timeline Order**: Array of asset_ids in user-determined order. Stored in project.json.
-- **Trim Settings**: Per-video start/end times. Stored in project.json timeline items.
+- **Scene Story**: Text note associated with a scene_id. Stored in project.json `scene_notes` dict. The AI interprets this for pacing, captions, mood.
+- **Scene Order**: Array of scene_ids in user-determined order. Stored in project.json.
+- **AI Plan**: Per-scene text generated by the AI describing its intention (e.g., "Fast montage with boat engine audio"). Shown to user, editable by AI based on notes.
 
 ## Success Criteria *(mandatory)*
 
