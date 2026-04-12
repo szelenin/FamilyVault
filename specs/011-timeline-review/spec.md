@@ -36,7 +36,7 @@ Screen 2 shows the user's trip as a list of MOMENTS/SCENES — not individual ph
 
 1. **Given** the user's selection spans 10 scenes, **When** they open Screen 2, **Then** they see a vertical list of scenes with: thumbnail strip (first 5 photos), scene label, item count, estimated duration, and the AI's plan for that section.
 
-2. **Given** a scene, **When** the user taps "Add your story", **Then** a text field opens where they type their memory/context. Mobile keyboard mic handles voice-to-text.
+2. **Given** a scene, **When** the user taps "Add your story", **Then** a text field opens. The user can type anything: stories ("we waited 2 hours"), AI instructions ("make this exciting, fast cuts"), trim requests ("skip the boring part of the big video"), mood ("this was emotional"). Mobile keyboard mic handles voice-to-text. The AI interprets everything.
 
 3. **Given** the user types "We waited 2 hours for the passport appointment, kid was bored then super excited when it was done", **When** they save, **Then** the note is stored in project.json per scene_id and a story icon appears on the scene card.
 
@@ -70,16 +70,18 @@ The AI reads the user's notes and adjusts the video generation: pacing, captions
 
 ---
 
-### User Story 3 — Scene Reorder + Remove (Priority: P1)
+### User Story 3 — Scene Reorder + Remove + Video Trim (Priority: P1)
 
-The user can reorder scenes and remove scenes they don't want.
+The user can reorder scenes, remove unwanted scenes, and trim individual video clips for precision.
 
-**Why this priority**: The AI orders scenes chronologically by default, which is usually right. But the user might want to rearrange for storytelling ("end with the sunset, not the airport").
+**Why this priority**: Reorder and remove are essential for storytelling flow. Video trim gives precision when "use the fast part" isn't specific enough.
 
 **Acceptance Scenarios**:
 
 1. **Given** the scene list, **When** the user drags a scene to a different position, **Then** the order updates and persists.
 2. **Given** a scene, **When** the user taps remove, **Then** undo toast, scene disappears, items go to deselected_ids.
+3. **Given** an expanded scene with a video thumbnail, **When** the user taps the video, **Then** a trim control appears with start/end sliders. Trim settings saved to project.json.
+4. **Given** a video trimmed to 0:12-0:18, **When** the AI generates the clip, **Then** only that 6-second segment is used.
 
 ---
 
@@ -139,8 +141,9 @@ Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the curr
 - **FR-004**: Tap "Add your story" opens text field. Mobile keyboard mic handles voice-to-text.
 - **FR-005**: Stories stored in project.json as `"scene_notes": {"scene_id": "text..."}` dict.
 - **FR-006**: AI reads scene notes during video generation and adjusts pacing, captions, transitions per scene.
-- **FR-007**: Tap thumbnail strip expands to show all items in that scene (view only).
+- **FR-007**: Tap thumbnail strip expands to show all items in that scene. Tap a video thumbnail to open trim control (start/end sliders).
 - **FR-008**: Drag-and-drop reorder of scenes.
+- **FR-008a**: Video trim: start/end sliders per video clip. Saved to project.json. For casual trim, user can also write it in the story field ("only first 5 seconds") and the AI interprets.
 - **FR-009**: Remove scene with undo toast (items go to deselected_ids).
 - **FR-010**: Works on mobile (touch-friendly, responsive).
 - **FR-011**: Sticky summary bar on both screens: selected count, estimated duration, link to the other screen. No generate button — AI guides generation through conversation.
