@@ -103,7 +103,7 @@
           </div>
         </div>
       </a>
-      <button onclick={(e) => excludeScene(scene.id, e)}
+      <button onclick={(e) => excludeScene(scene.id, e)} data-testid="exclude-scene"
               class="p-3 text-gray-500 hover:text-red-400 transition shrink-0">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 8v13H3V8"/>
