@@ -145,7 +145,8 @@ Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the curr
 - **FR-009**: Remove scene with undo toast (items go to deselected_ids).
 - **FR-010**: Works on mobile (touch-friendly, responsive).
 - **FR-011**: Sticky summary bar on both screens: selected count, estimated duration, link to the other screen. No generate button — AI guides generation through conversation.
-- **FR-012**: Quick preview: AI generates 480p fast-encoded preview for user feedback before final HD. (Phase 2)
+- **FR-012**: Quick preview: AI generates 480p fast-encoded preview, shares via Immich link. User watches, gives feedback in conversation. AI adjusts and re-previews or generates final HD. (Phase 2)
+- **FR-013**: AI guides the full flow via conversation. At each step, Claude tells the user what to do next: "select photos" → Screen 1 link, "add stories" → Screen 2 link, "watch preview" → Immich link, "give feedback or generate final." This guidance lives in SKILL.md, not in the UI.
 
 ### Key Entities
 
