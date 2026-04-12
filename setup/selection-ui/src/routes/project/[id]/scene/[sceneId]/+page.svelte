@@ -155,8 +155,14 @@
     <!-- Photo -->
     <div class="flex-1 flex items-center justify-center overflow-hidden"
          onclick={(e) => e.stopPropagation()}>
-      <img src="/api/thumbnail/{detailItem.asset_id}?size=preview"
-           alt="" class="max-w-full max-h-full object-contain" />
+      {#if detailItem.type === "VIDEO"}
+        <video src="/api/thumbnail/{detailItem.asset_id}?size=original"
+               controls autoplay playsinline
+               class="max-w-full max-h-full object-contain" />
+      {:else}
+        <img src="/api/thumbnail/{detailItem.asset_id}?size=preview"
+             alt="" class="max-w-full max-h-full object-contain" />
+      {/if}
     </div>
 
     <!-- Navigation -->
