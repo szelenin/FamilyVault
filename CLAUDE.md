@@ -144,8 +144,15 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Python 3.13 (Mac Mini) + Python 3.9 (local tests) + FFmpeg 8+ (HEVC decode, xfade, audio mixing), sips (DNG→JPEG), Immich REST API (009-assembler-refactor)
 - TypeScript, SvelteKit, Node.js (needs installing on Mac Mini) + SvelteKit, @immich/ui, @vite-pwa/sveltekit, Tailwind CSS (010-selection-ui)
 - Reads/writes project.json on filesystem, reads thumbnails from Immich API (010-selection-ui)
+- TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy (011-timeline-review)
+- project.json — add `notes` dict and `timeline_order` array (011-timeline-review)
 
 ## Recent Changes
-- 005-smart-photo-selection: Smart photo/video selection pipeline with quality scoring (faces, relevance, diversity, resolution), burst dedup, scene detection, budget allocation, visual preview via Immich albums. Video output quality: CRF 18, 5+ Mbps, 30fps, sips quality 100.
-- 001-ai-story-engine: Full story engine v1 — search, scenario management, music selection, FFmpeg video assembly.
+- 010-selection-ui: SvelteKit PWA at macmini:3000 for scene-based photo/video selection. Browse scenes, tap to select, full-screen preview, video playback, favorites, batch operations.
+- 009-assembler-refactor: v2 project.json support, DNG/RAW conversion, video clips with audio sync, portrait/landscape orientation, no-crop display.
+- 008-intelligent-search: AI-first probe search for date discovery, GPS location expansion, AI-driven budget allocation.
+- 007-smart-scene-discovery: Two-phase workflow (discover all → confirm), broad CLIP search, must-have verification.
+- 006-screenshot-filter: Multi-signal garbage filtering (screenshots, story-engine clips, non-photo content).
+- 005-smart-photo-selection: Quality scoring, burst dedup, scene detection, budget allocation.
+- 001-ai-story-engine: Full story engine v1 — search, scenario management, music selection, FFmpeg assembly.
 - 002-immich-setup: Bash + Docker Compose (via OrbStack), Immich v2.6.3, bats-core (testing)

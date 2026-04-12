@@ -1,14 +1,29 @@
 # Story Engine
 
-AI-powered video story creation from your Immich photo library. Uses Claude Code as the conversational interface to search, curate, and assemble family video clips.
+AI-powered video story creation from your Immich photo library. The AI (Claude) orchestrates the entire workflow — from understanding your intent, to searching photos, to generating the video. The UI and scripts are tools the AI uses.
+
+## Architecture
+
+```
+User ↔ Claude (conversation) ← AI orchestrates everything
+         ↓ gives links
+    Selection UI (macmini:3000) ← Screen 1: select photos, Screen 2: add stories
+         ↓ reads/writes
+    project.json ← shared state
+         ↓ reads
+    Python scripts ← search, score, assemble
+         ↓ calls
+    Immich API + FFmpeg ← data access + video encoding
+```
 
 ## Prerequisites
 
-- Immich running at `http://immich-immich-server-1.orb.local` (or configure `IMMICH_URL`)
+- Immich running at `http://localhost:2283` (or configure `IMMICH_URL`)
 - Immich API key at `/Volumes/HomeRAID/immich/api-key.txt`
-- FFmpeg 8.x installed on Mac Mini: `brew install ffmpeg`
+- FFmpeg 8.x: `brew install ffmpeg`
+- Node.js 25+: `brew install node` (for Selection UI)
 - Python 3.9+ with `requests`: `pip3 install requests`
-- Stories directory: `/Volumes/HomeRAID/stories` (created automatically)
+- Stories directory: `/Volumes/HomeRAID/stories`
 
 ## Installation
 
@@ -25,27 +40,21 @@ ssh macmini "
 
 Start a conversation with Claude Code and describe what you want:
 
-### Create a story
-> "Create a story about Edgar's birthday in Miami in March 2025"
+> "Make a clip of our Miami trip. Speedboat, vizcaya garden, sunset walk must have."
 
-Claude will search Immich, select the best photos, propose a scenario with captions and narrative.
+Claude will:
+1. **Probe search** — discover trip dates from your photos (no dates needed from you)
+2. **Broad search** — find all content via CLIP + date range, no city filter
+3. **Discover scenes** — group into moments, present ALL scenes
+4. **Give Selection UI link** — `http://macmini:3000/project/ID` for photo selection on your phone
+5. **Build timeline** — AI-driven budget based on your emphasis and scene importance
+6. **Generate video** — portrait/landscape based on target device, with audio from video clips
 
-### Refine the scenario
-> "Remove the airport photos"
-> "Make the narrative more fun and lighthearted"
-> "Add the photos from the pool"
-> "Shorten it to 10 photos max"
-
-### Select music
-> "What music do you suggest?"
-> "Use the upbeat option"
-> "I'll use my own file: /Music/vacation.mp3"
-> "Skip music"
-
-### Generate the video
-> "Generate the video"
-
-Claude assembles the MP4 on the Mac Mini and reports the output path.
+### Refine through conversation
+> "Skip the airport scenes"
+> "I want more speedboat videos"
+> "Make it shorter"
+> "Generate for YouTube" (landscape) / "for my phone" (portrait)
 
 ---
 
