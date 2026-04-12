@@ -78,6 +78,28 @@ The user can trim video clips, adjust speed, mute audio, and reorder items in th
 
 ---
 
+### User Story 4 — Guided Transition from Screen 1 to Screen 2 (Priority: P1)
+
+When the user finishes selecting in Screen 1, the UI guides them to the next step — either Screen 2 (annotate) or generate directly. Both options show a summary with estimated video duration.
+
+**Why this priority**: Without this, the user finishes selecting and doesn't know what to do next. They have to go back to Claude and say "done." The UI should guide the flow.
+
+**Independent Test**: Finish selecting → see summary bar → shows "42 items, ~3 min video" → two buttons: "Add Notes" and "Generate Now."
+
+**Acceptance Scenarios**:
+
+1. **Given** the user is on Screen 1 (scene list), **When** items are selected, **Then** a sticky bottom bar shows: total selected count, estimated video duration, and two action buttons.
+
+2. **Given** the summary bar, **When** it shows "42 photos, 8 videos · ~3:20 estimated", **Then** the duration is calculated from: photos × 4s + video durations − crossfade overlaps.
+
+3. **Given** the user taps "Add Notes →", **When** Screen 2 opens, **Then** it shows the timeline with their selected items ready for annotation.
+
+4. **Given** the user taps "Generate Now", **When** Claude receives the signal, **Then** it skips Screen 2 and builds the video directly from the selection.
+
+5. **Given** 0 items selected, **When** the summary bar renders, **Then** it shows "No items selected" and both buttons are disabled.
+
+---
+
 ### Edge Cases
 
 - What if the user adds a very long note (500+ characters)? Truncate display, store full text. AI reads the full text.
