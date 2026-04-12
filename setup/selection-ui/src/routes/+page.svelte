@@ -1,37 +1,12 @@
 <script lang="ts">
   let { data } = $props();
   let projects = $state(data.projects);
-  let swiping = $state<string | null>(null);
-  let swipeX = $state(0);
 
-  async function archiveProject(id: string) {
+  async function archiveProject(id: string, e: Event) {
+    e.preventDefault();
+    e.stopPropagation();
     await fetch(`/api/project/${id}/archive`, { method: "POST" });
     projects = projects.filter(p => p.id !== id);
-  }
-
-  function handleTouchStart(e: TouchEvent, id: string) {
-    swiping = id;
-    swipeX = e.touches[0].clientX;
-  }
-
-  function handleTouchMove(e: TouchEvent, id: string) {
-    if (swiping !== id) return;
-    const diff = e.touches[0].clientX - swipeX;
-    const el = e.currentTarget as HTMLElement;
-    if (diff < 0) {
-      el.style.transform = `translateX(${Math.max(diff, -120)}px)`;
-    }
-  }
-
-  function handleTouchEnd(e: TouchEvent, id: string) {
-    const el = e.currentTarget as HTMLElement;
-    const diff = parseInt(el.style.transform.replace(/[^-\d]/g, "") || "0");
-    if (diff < -80) {
-      el.style.transform = "translateX(-120px)";
-    } else {
-      el.style.transform = "translateX(0)";
-    }
-    swiping = null;
   }
 </script>
 
@@ -42,23 +17,21 @@
 {:else}
   <div class="space-y-3">
     {#each projects as project}
-      <div class="relative overflow-hidden rounded-lg">
-        <!-- Archive button behind -->
-        <div class="absolute inset-y-0 right-0 w-28 bg-red-600 flex items-center justify-center">
-          <button onclick={() => archiveProject(project.id)} class="text-white font-medium text-sm">
-            Archive
-          </button>
-        </div>
-        <!-- Project card -->
-        <a href="/project/{project.id}"
-           class="block bg-gray-900 p-4 relative transition-transform"
-           ontouchstart={(e) => handleTouchStart(e, project.id)}
-           ontouchmove={(e) => handleTouchMove(e, project.id)}
-           ontouchend={(e) => handleTouchEnd(e, project.id)}>
+      <a href="/project/{project.id}"
+         class="flex items-center gap-3 bg-gray-900 rounded-lg p-4 hover:bg-gray-800 transition">
+        <div class="flex-1 min-w-0">
           <div class="font-semibold">{project.title}</div>
           <div class="text-sm text-gray-400">{project.sceneCount} scenes · {project.state}</div>
-        </a>
-      </div>
+        </div>
+        <button onclick={(e) => archiveProject(project.id, e)}
+                class="p-2 text-gray-500 hover:text-red-400 transition shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8v13H3V8"/>
+            <path d="M1 3h22v5H1z"/>
+            <path d="M10 12h4"/>
+          </svg>
+        </button>
+      </a>
     {/each}
   </div>
 {/if}
