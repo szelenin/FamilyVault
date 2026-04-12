@@ -43,7 +43,9 @@ After the AI builds a timeline from the user's selection, the user opens Screen 
 
 4. **Given** the user taps the voice record button, **When** they speak, **Then** the audio is transcribed to text (speech-to-text) and saved as the note. The original audio is NOT stored — only the transcription.
 
-5. **Given** 45 items in the timeline, **When** the user adds notes to 5 of them and tells Claude "ready to generate", **Then** Claude reads all notes from project.json.
+5. **Given** an item in the timeline the user doesn't want, **When** they swipe or tap a remove button, **Then** the item is removed from the timeline and added to deselected_ids. The list renumbers. Undo toast for 5 seconds.
+
+6. **Given** 45 items in the timeline, **When** the user adds notes to 5 of them and removes 3, **Then** Claude reads the final 42 items with notes from project.json.
 
 ---
 
