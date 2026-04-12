@@ -253,6 +253,22 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+### IMP-014: Duplicate Detection
+
+**Problem**: The photo library contains duplicate or near-duplicate photos from multiple sources: iCloud Shared Library creates copies (files with `(1)` suffix), Google Takeout may contain the same photos, and burst shots produce near-identical images. Users see duplicates in the selection UI and the AI includes them in clips.
+
+**Requirements**:
+- R073: Detect exact duplicates by file checksum (MD5/SHA256). Keep one, mark others as duplicates.
+- R074: Detect near-duplicates by thumbhash Hamming distance (threshold ≤ 3 bits) or perceptual hash. Keep the highest quality version.
+- R075: Phase 1 — photos only. Phase 2 — extend to videos (compare first frame or file hash).
+- R076: During scene discovery, automatically hide duplicates from the selection UI. Show count: "5 duplicates hidden."
+- R077: User can view hidden duplicates if they want to override the auto-selection.
+- R078: In the generated clip, never include two versions of the same photo.
+
+**Priority**: MEDIUM — improves selection quality and reduces clutter. Not blocking but noticeable with 313 selected items.
+
+---
+
 ### IMP-013: Timeline Review Screen (Screen 2)
 
 **Problem**: After selecting content in Screen 1, the user needs a way to review the AI's arrangement, add notes/tags, trim videos, adjust speed, and provide detailed instructions per item. This is too detailed for the scene selection grid (Screen 1) and too complex for Claude's text interface.
