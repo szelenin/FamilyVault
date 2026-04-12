@@ -1,18 +1,40 @@
 <script lang="ts">
   let { data } = $props();
   let projects = $state(data.projects);
+  let archived = $state<{id: string, title: string} | null>(null);
+  let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function archiveProject(id: string, e: Event) {
     e.preventDefault();
     e.stopPropagation();
-    await fetch(`/api/project/${id}/archive`, { method: "POST" });
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+
+    // Remove from list visually
     projects = projects.filter(p => p.id !== id);
+    archived = { id, title: project.title };
+
+    // Auto-confirm after 5 seconds
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(async () => {
+      await fetch(`/api/project/${id}/archive`, { method: "POST" });
+      archived = null;
+    }, 5000);
+  }
+
+  function undoArchive() {
+    if (!archived) return;
+    if (undoTimer) clearTimeout(undoTimer);
+    // Re-add to list
+    const project = data.projects.find(p => p.id === archived!.id);
+    if (project) projects = [...projects, project].sort((a, b) => b.id.localeCompare(a.id));
+    archived = null;
   }
 </script>
 
 <h1 class="text-2xl font-bold mb-6">Projects</h1>
 
-{#if projects.length === 0}
+{#if projects.length === 0 && !archived}
   <p class="text-gray-400">No projects found. Ask Claude to create one.</p>
 {:else}
   <div class="space-y-3">
@@ -33,5 +55,16 @@
         </button>
       </a>
     {/each}
+  </div>
+{/if}
+
+<!-- Undo toast -->
+{#if archived}
+  <div class="fixed bottom-6 left-4 right-4 bg-gray-800 rounded-lg p-4 flex items-center gap-3 shadow-xl border border-gray-700 z-50">
+    <span class="flex-1 text-sm">Archived "{archived.title}"</span>
+    <button onclick={undoArchive}
+            class="px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium hover:bg-blue-500 transition">
+      Undo
+    </button>
   </div>
 {/if}
