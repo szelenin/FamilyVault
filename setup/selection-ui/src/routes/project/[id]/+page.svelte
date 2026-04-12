@@ -17,7 +17,7 @@
       <div class="flex items-center gap-3 p-3">
         {#if scene.asset_ids[0]}
           <img src="/api/thumbnail/{scene.asset_ids[0]}" 
-               alt="" class="w-16 h-16 object-cover rounded" loading="lazy" />
+               alt="" class="w-20 h-20 object-cover rounded" loading="lazy" />
         {/if}
         <div class="flex-1 min-w-0">
           <div class="font-medium truncate">{scene.label || 'Scene ' + (i+1)}</div>
