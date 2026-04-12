@@ -12,6 +12,12 @@
   <p class="text-sm text-gray-400">{totalSelected}/{totalItems} selected · {data.scenes.length} scenes</p>
 </div>
 
+<!-- Summary bar -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 p-3 flex items-center justify-between z-40">
+  <div class="text-sm text-gray-400">{totalSelected}/{totalItems} selected</div>
+  <a href="/project/{data.project.id}/timeline" class="text-sm text-blue-400 font-medium">Review Timeline &rarr;</a>
+</div>
+
 {#if emptyScenes.length > 0}
   <details class="mt-6">
     <summary class="text-sm text-gray-500 cursor-pointer">{emptyScenes.length} deselected scenes</summary>
