@@ -17,6 +17,7 @@
     if (!scene) return;
 
     scene.excluded = true;
+    scenes = [...scenes]; // trigger reactivity
     excludedToast = { id: sceneId, label: scene.label || "Scene" };
 
     if (undoTimer) clearTimeout(undoTimer);
@@ -32,6 +33,7 @@
     if (undoTimer) clearTimeout(undoTimer);
     const scene = scenes.find(s => s.id === excludedToast!.id);
     if (scene) scene.excluded = false;
+    scenes = [...scenes]; // trigger reactivity
     excludedToast = null;
   }
 
@@ -39,6 +41,7 @@
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
     scene.excluded = false;
+    scenes = [...scenes]; // trigger reactivity
     // Remove scene assets from deselected_ids
     await persistRestore(sceneId);
   }
@@ -80,7 +83,7 @@
 </div>
 
 <div class="space-y-3">
-  {#each activeScenes as scene, i}
+  {#each activeScenes as scene (scene.id)}
     <div class="flex items-center gap-3 bg-gray-900 rounded-lg overflow-hidden">
       <a href="/project/{data.project.id}/scene/{scene.id}" class="flex items-center gap-3 p-3 flex-1 min-w-0">
         {#if scene.assetIds[0]}
@@ -88,7 +91,7 @@
                alt="" class="w-20 h-20 object-cover rounded shrink-0" loading="lazy" />
         {/if}
         <div class="flex-1 min-w-0">
-          <div class="font-medium truncate">{scene.label || "Scene " + (i+1)}</div>
+          <div class="font-medium truncate">{scene.label || scene.id}</div>
           <div class="text-xs text-gray-400">
             {scene.time_range[0]?.slice(0,16).replace("T"," ")} ·
             {scene.cities?.join(", ") || ""}
@@ -125,7 +128,7 @@
 
     {#if showExcluded}
       <div class="mt-3 space-y-2">
-        {#each excludedScenes as scene}
+        {#each excludedScenes as scene (scene.id)}
           <div class="flex items-center gap-3 bg-gray-900/50 rounded-lg p-3 opacity-60">
             <div class="flex-1 min-w-0">
               <div class="text-sm truncate">{scene.label || scene.id}</div>
