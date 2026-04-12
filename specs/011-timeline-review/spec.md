@@ -70,7 +70,7 @@ The AI reads the user's notes and adjusts the video generation: pacing, captions
 
 ---
 
-### User Story 3 — Scene Reorder + Remove (Priority: P2)
+### User Story 3 — Scene Reorder + Remove (Priority: P1)
 
 The user can reorder scenes and remove scenes they don't want.
 
@@ -99,7 +99,7 @@ After the user adds stories, the AI generates a quick low-quality preview (480p,
 
 ---
 
-### User Story 4 — Summary Bar + Navigation (Priority: P1)
+### User Story 4 — Summary Bar + Navigation (Priority: P2)
 
 Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the current selection count and estimated video duration. Screen 1 has a link to Screen 2. Screen 2 has a link back to Screen 1. The user can switch freely between them. No generate button — the AI guides generation through conversation.
 
