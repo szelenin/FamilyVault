@@ -271,17 +271,38 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ### IMP-013: Timeline Review Screen (Screen 2)
 
-**Problem**: After selecting content in Screen 1, the user needs a way to review the AI's arrangement, add notes/tags, trim videos, adjust speed, and provide detailed instructions per item. This is too detailed for the scene selection grid (Screen 1) and too complex for Claude's text interface.
+**Problem**: After selecting content in Screen 1, the user needs a way to review the AI's arrangement and add context that only they know — stories, memories, emotions tied to specific photos. This context is what transforms a slideshow into a story. Screen 1 is for fast selection; Screen 2 is for storytelling.
+
+**User Stories**:
+
+**US1: Review & Annotate (P1)**
+- Screen 2 shows only SELECTED items from Screen 1, arranged in timeline order (40-50 items, not 313)
+- User can add a voice note or text note per item. Most items get no notes — only the ones with a story.
+- Notes are context for the AI: "we were waiting for the passport appointment", "Waymo taxi made an April Fools joke and my kid fell for it", "this was the first time he saw the ocean"
+- Notes stored in project.json per asset_id
+
+**US2: AI Interprets Notes (P1)**
+- AI reads notes and adjusts the video: pacing (slow for "waiting"), mood (upbeat for "funny joke"), transitions (dramatic for "first time")
+- AI can generate text captions from notes — shown over the photo/video in the clip
+- AI can suggest sound effects or music mood changes based on note sentiment
+- The interpretation is AI-driven, not rule-based — the AI decides how to use each note
+- AI can ask: "You mentioned a funny moment — want me to add a caption?"
+
+**US3: Video-Specific Controls (P2)**
+- Trim video clips (start/end)
+- Speed adjustment (slow-mo, fast)
+- Keep/mute audio per clip
+- Reorder items by drag-and-drop
 
 **Requirements**:
-- R067: Screen 2 shows only SELECTED items from Screen 1, arranged in timeline order.
-- R068: Per-item controls: voice note, text note, star/priority, custom tags.
-- R069: Video-specific: trim start/end, speed adjustment (slow-mo, fast), keep/mute audio.
-- R070: AI interprets annotations to build the final video — notes become instructions ("hero shot" → longer duration, "slow-mo" → speed reduction).
-- R071: User can reorder items by drag-and-drop.
-- R072: Optional — skip Screen 2 entirely and go straight to generate from Screen 1.
+- R067: Screen 2 shows only SELECTED items in timeline order. Accessible at `/project/{id}/timeline`.
+- R068: Per-item voice note (speech-to-text) or text note. Stored in project.json.
+- R069: AI reads notes and adjusts pacing, captions, transitions, mood — no fixed rules.
+- R070: Video-specific: trim start/end, speed adjustment, keep/mute audio.
+- R071: Drag-and-drop reorder.
+- R072: Optional — user can skip Screen 2 and go straight to generate from Screen 1.
 
-**Depends on**: IMP-007 (Screen 1 must be working first).
+**Depends on**: IMP-007 (Screen 1 must be working first — DONE).
 
 ---
 
