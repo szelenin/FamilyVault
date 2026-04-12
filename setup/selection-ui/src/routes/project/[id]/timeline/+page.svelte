@@ -98,7 +98,7 @@
       </div>
 
       <!-- Thumbnail strip -->
-      <div class="px-3 pb-2 cursor-pointer" onclick={() => toggleExpand(scene.id)}>
+      <button class="px-3 pb-2 cursor-pointer w-full text-left" onclick={() => toggleExpand(scene.id)}>
         <div class="flex gap-1 overflow-hidden" class:flex-wrap={expandedScene === scene.id}>
           {#each expandedScene === scene.id ? scene.selectedIds : scene.selectedIds.slice(0, 6) as assetId}
             <img src="/api/thumbnail/{assetId}"
@@ -113,7 +113,7 @@
         {#if expandedScene !== scene.id && scene.selectedIds.length > 6}
           <div class="text-xs text-gray-500 mt-1">Tap to see all {scene.selectedIds.length} items</div>
         {/if}
-      </div>
+      </button>
 
       <!-- Story field -->
       <div class="px-3 pb-3">
