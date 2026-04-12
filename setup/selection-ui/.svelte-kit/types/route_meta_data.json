@@ -1,0 +1,23 @@
+{
+	"/": [
+		"src/routes/+page.server.ts"
+	],
+	"/api/favorite/[assetId]": [
+		"src/routes/api/favorite/[assetId]/+server.ts"
+	],
+	"/api/project/[id]": [
+		"src/routes/api/project/[id]/+server.ts"
+	],
+	"/api/project/[id]/select": [
+		"src/routes/api/project/[id]/select/+server.ts"
+	],
+	"/api/thumbnail/[assetId]": [
+		"src/routes/api/thumbnail/[assetId]/+server.ts"
+	],
+	"/project/[id]": [
+		"src/routes/project/[id]/+page.server.ts"
+	],
+	"/project/[id]/scene/[sceneId]": [
+		"src/routes/project/[id]/scene/[sceneId]/+page.server.ts"
+	]
+}
