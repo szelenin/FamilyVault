@@ -26,7 +26,7 @@ After the user selects photos/videos in Screen 1, they need a way to add stories
 
 ### User Story 1 — Scene-Level Storytelling (Priority: P1)
 
-Screen 2 shows the user's trip as a list of MOMENTS/SCENES — not individual photos. Each scene shows a thumbnail strip, the AI's plan for that section, and a place to add a story. The user adds context to the moments that matter.
+Screen 2 shows the user's trip as a list of MOMENTS/SCENES — not individual photos. Each scene shows a thumbnail strip and a place to add a story. The user adds context to the moments that matter.
 
 **Why this priority**: Users think in moments ("the speedboat tour", "waiting for the passport"), not individual photos. Scene-level stories are natural and fast — 10 scenes to review, not 50 photos.
 
@@ -34,7 +34,7 @@ Screen 2 shows the user's trip as a list of MOMENTS/SCENES — not individual ph
 
 **Acceptance Scenarios**:
 
-1. **Given** the user's selection spans 10 scenes, **When** they open Screen 2, **Then** they see a vertical list of scenes with: thumbnail strip (first 5 photos), scene label, item count, estimated duration, and the AI's plan for that section.
+1. **Given** the user's selection spans 10 scenes, **When** they open Screen 2, **Then** they see a vertical list of scenes with: thumbnail strip (first 5 photos), scene label, item count, estimated duration, and a story field.
 
 2. **Given** a scene, **When** the user taps "Add your story", **Then** a text field opens. The user can type anything: stories ("we waited 2 hours"), AI instructions ("make this exciting, fast cuts"), trim requests ("skip the boring part of the big video"), mood ("this was emotional"). Mobile keyboard mic handles voice-to-text. The AI interprets everything.
 
@@ -126,9 +126,7 @@ Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the curr
 ### Edge Cases
 
 - What if the user adds a very long note (500+ characters)? Truncate display, store full text. AI reads the full text.
-- What if speech-to-text fails? Fall back to text input. Show "Could not transcribe — please type instead."
-- What if the browser doesn't support speech-to-text? Hide the voice button, show text only.
-- What if the user reorders items across scenes? Allow it — the timeline is the user's creative choice, not bound by scene order.
+- What if the user reorders scenes and the chronological order breaks? Allow it — the order is the user's creative choice.
 - What if the user skips Screen 2? That's fine — notes are optional. AI generates with standard treatment.
 
 ## Requirements *(mandatory)*
