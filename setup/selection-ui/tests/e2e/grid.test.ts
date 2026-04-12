@@ -27,20 +27,20 @@ test.describe("Photo Grid", () => {
   });
 
   test("batch action buttons are visible", async ({ page }) => {
-    await expect(page.getByText("Select All")).toBeVisible();
-    await expect(page.getByText("Deselect All")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Select All", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Deselect All" })).toBeVisible();
     await expect(page.getByText("Photos Only")).toBeVisible();
     await expect(page.getByText("Videos Only")).toBeVisible();
   });
 
   test("clicking deselect all updates count", async ({ page }) => {
-    await page.getByText("Deselect All").click();
+    await page.getByRole("button", { name: "Deselect All" }).click();
     await expect(page.locator("text=0/")).toBeVisible({ timeout: 5000 });
   });
 
   test("clicking select all restores count", async ({ page }) => {
-    await page.getByText("Deselect All").click();
-    await page.getByText("Select All").click();
+    await page.getByRole("button", { name: "Deselect All" }).click();
+    await page.getByRole("button", { name: "Select All", exact: true }).click();
     const countText = await page.locator("text=/\\d+\\/\\d+ selected/").textContent();
     const parts = countText?.match(/(\d+)\/(\d+)/);
     if (parts) expect(parts[1]).toBe(parts[2]);

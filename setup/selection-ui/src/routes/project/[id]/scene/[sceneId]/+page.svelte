@@ -114,7 +114,9 @@
            loading="lazy" />
 
       <!-- Selection checkbox -->
-      <button class="absolute top-1 left-1 w-7 h-7 rounded-full border-2 flex items-center justify-center bg-black/50 border-white/50" class:!bg-blue-500={item.selected} class:!border-blue-500={item.selected}
+      <button class="absolute top-1 left-1 w-7 h-7 rounded-full border-2 flex items-center justify-center"
+              style:background={item.selected ? "#3b82f6" : "rgba(0,0,0,0.5)"}
+              style:border-color={item.selected ? "#3b82f6" : "rgba(255,255,255,0.5)"}
               onclick={(e) => toggleItem(item.asset_id, e)}>
         {#if item.selected}<span class="text-xs font-bold">✓</span>{/if}
       </button>
@@ -144,7 +146,8 @@
       <button onclick={closeDetail} class="text-white text-lg">✕</button>
       <span class="text-sm text-gray-400">{detailIndex + 1} / {items.length}</span>
       <button onclick={toggleDetailSelection}
-              class="px-3 py-1 rounded-full text-sm font-medium bg-gray-700" class:!bg-blue-500={detailItem.selected}>
+              class="px-3 py-1 rounded-full text-sm font-medium"
+              style:background={detailItem.selected ? "#3b82f6" : "#374151"}>
         {detailItem.selected ? "Selected ✓" : "Deselected"}
       </button>
     </div>
