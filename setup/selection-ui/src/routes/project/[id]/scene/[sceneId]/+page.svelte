@@ -110,13 +110,11 @@
     <div class="relative aspect-square cursor-pointer group"
          onclick={() => openDetail(i)}>
       <img src="/api/thumbnail/{item.asset_id}"
-           alt="" class="w-full h-full object-cover rounded
-                        {item.selected ?  : opacity-30}"
+           alt="" class="w-full h-full object-cover rounded" class:opacity-30={!item.selected}
            loading="lazy" />
 
       <!-- Selection checkbox -->
-      <button class="absolute top-1 left-1 w-7 h-7 rounded-full border-2 flex items-center justify-center
-                  {item.selected ? bg-blue-500 border-blue-500 : border-white/50 bg-black/50}"
+      <button class="absolute top-1 left-1 w-7 h-7 rounded-full border-2 flex items-center justify-center bg-black/50 border-white/50" class:!bg-blue-500={item.selected} class:!border-blue-500={item.selected}
               onclick={(e) => toggleItem(item.asset_id, e)}>
         {#if item.selected}<span class="text-xs font-bold">✓</span>{/if}
       </button>
@@ -146,8 +144,7 @@
       <button onclick={closeDetail} class="text-white text-lg">✕</button>
       <span class="text-sm text-gray-400">{detailIndex + 1} / {items.length}</span>
       <button onclick={toggleDetailSelection}
-              class="px-3 py-1 rounded-full text-sm font-medium
-                     {detailItem.selected ? bg-blue-500 : bg-gray-700}">
+              class="px-3 py-1 rounded-full text-sm font-medium bg-gray-700" class:!bg-blue-500={detailItem.selected}>
         {detailItem.selected ? "Selected ✓" : "Deselected"}
       </button>
     </div>
@@ -162,7 +159,7 @@
     <!-- Navigation -->
     <div class="flex justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
       <button onclick={prevDetail}
-              class="px-6 py-2 bg-gray-800 rounded-lg {detailIndex === 0 ? opacity-30 : }"
+              class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === 0}
               disabled={detailIndex === 0}>
         ← Prev
       </button>
@@ -171,7 +168,7 @@
         {detailItem.favorite ? "♥" : "♡"}
       </button>
       <button onclick={nextDetail}
-              class="px-6 py-2 bg-gray-800 rounded-lg {detailIndex === items.length - 1 ? opacity-30 : }"
+              class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === items.length - 1}
               disabled={detailIndex === items.length - 1}>
         Next →
       </button>
