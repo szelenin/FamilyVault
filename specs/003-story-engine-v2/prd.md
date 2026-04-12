@@ -222,6 +222,14 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 - R060: Separate storage paths: processed files → Immich library, DNG/raw → archive folder (not indexed by Immich to avoid duplicates).
 - R061: Verify fix by checking a sample of previously dark/GPS-missing/flipped assets.
 
+**Research needed before implementation**:
+- How does Immich handle two files for the same photo (DNG + HEIC)? Does it show duplicates or can it stack/link them?
+- If both are indexed, which one does Immich use for thumbnails and previews?
+- If the story engine selects a photo, which version (DNG vs HEIC) gets used in the clip? How do we ensure the processed HEIC is used for video assembly, not the dark DNG?
+- Does Immich's stacking feature (if available in v2.6.3) support linking raw + processed versions?
+- If we use DNG in the video clip, does FFmpeg apply any tone mapping or does it look dark? Do we need a separate tone-mapping step in the assembler?
+- What is the best Immich configuration: index both in same library, or HEIC in library + DNG in separate archive not indexed?
+
 **Priority**: HIGH — blocks accurate location discovery, correct photo display, and video quality. Should be done before IMP-010 metadata sync.
 
 ---
