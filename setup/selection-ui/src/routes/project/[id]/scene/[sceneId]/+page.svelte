@@ -2,6 +2,7 @@
   let { data } = $props();
   let items = $state(data.scene.items);
   let saving = $state(false);
+  let activeFilter = $state<string | null>(null);
   let detailItem = $state<any>(null);
   let detailIndex = $state(-1);
 
@@ -44,10 +45,18 @@
     await saveSelection();
   }
 
-  async function selectAll() { items.forEach(i => i.selected = true); await saveSelection(); }
-  async function deselectAll() { items.forEach(i => i.selected = false); await saveSelection(); }
-  async function photosOnly() { items.forEach(i => i.selected = i.type === "IMAGE"); await saveSelection(); }
-  async function videosOnly() { items.forEach(i => i.selected = i.type === "VIDEO"); await saveSelection(); }
+  async function selectAll() { activeFilter = null; items.forEach(i => i.selected = true); await saveSelection(); }
+  async function deselectAll() { activeFilter = null; items.forEach(i => i.selected = false); await saveSelection(); }
+  async function photosOnly() {
+    if (activeFilter === "photos") { activeFilter = null; items.forEach(i => i.selected = true); }
+    else { activeFilter = "photos"; items.forEach(i => i.selected = i.type === "IMAGE"); }
+    await saveSelection();
+  }
+  async function videosOnly() {
+    if (activeFilter === "videos") { activeFilter = null; items.forEach(i => i.selected = true); }
+    else { activeFilter = "videos"; items.forEach(i => i.selected = i.type === "VIDEO"); }
+    await saveSelection();
+  }
 
   async function saveSelection() {
     saving = true;
@@ -100,8 +109,8 @@
 <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
   <button onclick={selectAll} class="px-3 py-1.5 bg-gray-800 rounded-full text-xs whitespace-nowrap hover:bg-gray-700">Select All</button>
   <button onclick={deselectAll} class="px-3 py-1.5 bg-gray-800 rounded-full text-xs whitespace-nowrap hover:bg-gray-700">Deselect All</button>
-  <button onclick={photosOnly} class="px-3 py-1.5 bg-gray-800 rounded-full text-xs whitespace-nowrap hover:bg-gray-700">Photos Only</button>
-  <button onclick={videosOnly} class="px-3 py-1.5 bg-gray-800 rounded-full text-xs whitespace-nowrap hover:bg-gray-700">Videos Only</button>
+  <button onclick={photosOnly} class="px-3 py-1.5 rounded-full text-xs whitespace-nowrap" class:bg-blue-600={activeFilter === "photos"} class:bg-gray-800={activeFilter !== "photos"}>Photos Only</button>
+  <button onclick={videosOnly} class="px-3 py-1.5 rounded-full text-xs whitespace-nowrap" class:bg-blue-600={activeFilter === "videos"} class:bg-gray-800={activeFilter !== "videos"}>Videos Only</button>
 </div>
 
 <!-- Thumbnail grid -->
