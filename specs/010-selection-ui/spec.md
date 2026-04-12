@@ -5,6 +5,13 @@
 **Status**: Draft  
 **Input**: IMP-007 from PRD — Timeline Editing UX. Custom web app for scene-based photo/video selection.
 
+## Clarifications
+
+### Session 2026-04-11
+
+- Q: How should selection state be stored in project.json? → A: Only deselected IDs: `{"deselected_ids": ["a3", "a7"]}`. Everything else is selected. Favorites live in Immich (isFavorite), not duplicated. No separate starring system.
+- Q: How to distinguish photos from videos in the thumbnail grid? → A: Play icon (▶) overlay on video thumbnails + duration badge (e.g., "0:12"). Standard mobile pattern.
+
 ## Context
 
 The AI creates scenes and presents them to the user via text. The user needs to browse actual photos/videos, select/deselect items within each scene, and confirm the selection — all from their phone or desktop. Claude's text interface can't do this well. Immich's native album UI works but isn't designed for scene-based curation.
@@ -92,16 +99,17 @@ The user can include/exclude entire scenes from the scene list view.
 
 ---
 
-### User Story 5 — Quick Star/Priority (Priority: P3)
+### User Story 5 — Show and Set Favorites (Priority: P2)
 
-The user can mark specific items as "must include" (star) to tell the AI these are the most important shots.
+Photos/videos that are favorited in Immich (or synced from iCloud/Google) are visually indicated in the selection grid. The user can favorite/unfavorite directly in our UI — it writes back to Immich.
 
-**Why this priority**: Simple signal that helps AI prioritize without needing detailed notes. Notes/tags/trimming are deferred to Screen 2 (separate improvement).
+**Why this priority**: The user has years of favorites from Photos.app. These should be visible and serve as priority signals for the AI. No separate starring system — use Immich's native favorites.
 
 **Acceptance Scenarios**:
 
-1. **Given** a photo in the scene grid, **When** the user long-presses or taps a star icon, **Then** the photo is marked as priority (starred).
-2. **Given** starred items, **When** Claude builds the timeline, **Then** starred items get guaranteed slots regardless of budget.
+1. **Given** a photo is favorited in Immich (`isFavorite: true`), **When** the selection UI displays it, **Then** it shows a heart/star icon overlay on the thumbnail.
+2. **Given** the user taps the favorite icon on a non-favorited photo, **When** it toggles, **Then** it writes `isFavorite: true` to Immich via API and the icon updates.
+3. **Given** favorited items, **When** Claude builds the timeline, **Then** favorited items get priority (guaranteed slots, shown longer).
 
 ---
 
@@ -133,7 +141,7 @@ The user can mark specific items as "must include" (star) to tell the AI these a
 
 - **Project View**: The main page showing all scenes for a project. URL: `/project/{project-id}`
 - **Scene View**: Grid of thumbnails for one scene. URL: `/project/{project-id}/scene/{scene-id}`
-- **Selection State**: Per-item selected/deselected status, stored in project.json alongside the timeline.
+- **Selection State**: Stored in project.json as `{"deselected_ids": ["a3", "a7"]}`. Everything not listed is selected. Favorites live in Immich (`isFavorite` field), not duplicated in project.json.
 
 ## Success Criteria *(mandatory)*
 
