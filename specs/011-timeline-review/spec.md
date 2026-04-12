@@ -87,25 +87,25 @@ The user can trim video clips, adjust speed, mute audio, and reorder items in th
 
 ---
 
-### User Story 4 — Guided Transition from Screen 1 to Screen 2 (Priority: P1)
+### User Story 4 — Summary Bar + Navigation (Priority: P1)
 
-When the user finishes selecting in Screen 1, the UI guides them to the next step — either Screen 2 (annotate) or generate directly. Both options show a summary with estimated video duration.
+Both Screen 1 and Screen 2 show a sticky summary bar at the bottom with the current selection count and estimated video duration. Screen 1 has a link to Screen 2. Screen 2 has a link back to Screen 1. The user can switch freely between them. No generate button — the AI guides generation through conversation.
 
-**Why this priority**: Without this, the user finishes selecting and doesn't know what to do next. They have to go back to Claude and say "done." The UI should guide the flow.
+**Why this priority**: The user needs to see the impact of their selections at all times, and navigate freely between selecting (Screen 1) and reviewing/annotating (Screen 2).
 
-**Independent Test**: Finish selecting → see summary bar → shows "42 items, ~3 min video" → two buttons: "Add Notes" and "Generate Now."
+**Independent Test**: Open Screen 1 → see summary bar with count + duration → tap "Review Timeline" → Screen 2 opens → tap "Back to Selection" → Screen 1.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user is on Screen 1 (scene list), **When** items are selected, **Then** a sticky bottom bar shows: total selected count, estimated video duration, and two action buttons.
+1. **Given** the user is on Screen 1 or Screen 2, **When** items are selected, **Then** a sticky bottom bar shows: total selected count, estimated video duration, and a link to the other screen.
 
 2. **Given** the summary bar, **When** it shows "42 photos, 8 videos · ~3:20 estimated", **Then** the duration is calculated from: photos × 4s + video durations − crossfade overlaps.
 
-3. **Given** the user taps "Add Notes →", **When** Screen 2 opens, **Then** it shows the timeline with their selected items ready for annotation.
+3. **Given** the user is on Screen 1, **When** they tap "Review Timeline →", **Then** Screen 2 opens.
 
-4. **Given** the user taps "Generate Now", **When** Claude receives the signal, **Then** it skips Screen 2 and builds the video directly from the selection.
+4. **Given** the user is on Screen 2, **When** they tap "← Back to Selection", **Then** Screen 1 opens.
 
-5. **Given** 0 items selected, **When** the summary bar renders, **Then** it shows "No items selected" and both buttons are disabled.
+5. **Given** 0 items selected, **When** the summary bar renders, **Then** it shows "No items selected."
 
 ---
 
@@ -130,7 +130,7 @@ When the user finishes selecting in Screen 1, the UI guides them to the next ste
 - **FR-008**: Video trim controls: start/end sliders or time inputs.
 - **FR-009**: Drag-and-drop reorder of timeline items.
 - **FR-010**: Mute toggle per video clip.
-- **FR-011**: "Generate" button at the bottom. Also "Skip to generate" link to bypass Screen 2.
+- **FR-011**: Sticky summary bar on both screens: selected count, estimated duration, link to the other screen. No generate button — AI guides generation through conversation.
 - **FR-012**: Works on mobile (touch-friendly, responsive).
 
 ### Key Entities
