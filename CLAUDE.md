@@ -2,6 +2,19 @@
 
 You are helping a user set up FamilyVault: a self-hosted photo and video archive that downloads their entire family photo library from iCloud and/or Google Photos to a home server, preserves all metadata, and keeps it in sync automatically.
 
+## Design Philosophy — AI-First
+
+**The AI is the orchestrator. Everything else is a tool.**
+
+- The AI (Claude) drives the entire workflow — from understanding intent, to searching photos, to building timelines, to generating video. The AI reasons, decides, adapts, and asks questions.
+- **UI is a tool**, not the product. The Selection UI, Immich, and any future screens exist to simplify specific steps that are hard to do in text (browsing photos, selecting content). The AI owns the flow; the UI assists specific steps.
+- **Scripts/utilities are data access tools**, not the algorithm. Python scripts fetch data from Immich, run FFmpeg, read/write project.json. The AI decides when and how to use them.
+- **project.json is the shared state**. All communication between AI, UI, and scripts flows through the project file. The AI writes to it, the UI reads/writes to it, scripts read from it.
+- **The user guides, the AI executes.** The user provides intent ("make a clip of our Miami trip"), makes creative decisions (which scenes, which photos), and adds context (notes, stories). The AI handles everything else — search strategy, scoring, budgeting, assembly, effects.
+- **No fixed pipelines.** The AI picks the approach per request. Different prompts get different strategies. The AI can create temporary scripts, adjust parameters, retry with different approaches.
+
+When making design decisions, always ask: "Does this keep the AI as the driver, or does it push intelligence into fixed code?" Choose the former.
+
 ## Your role
 
 Guide the user interactively through the entire setup process. Adapt to their specific situation — do not assume anything about their hardware, cloud accounts, or technical experience.
@@ -129,6 +142,8 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Project files on `/Volumes/HomeRAID/stories/` (007-smart-scene-discovery)
 - Python 3.13 (Mac Mini) for utilities, SKILL.md (natural language) for the AI workflow + Immich REST API v2.6.3, existing utility functions from 005/006/007 (008-intelligent-search)
 - Python 3.13 (Mac Mini) + Python 3.9 (local tests) + FFmpeg 8+ (HEVC decode, xfade, audio mixing), sips (DNG→JPEG), Immich REST API (009-assembler-refactor)
+- TypeScript, SvelteKit, Node.js (needs installing on Mac Mini) + SvelteKit, @immich/ui, @vite-pwa/sveltekit, Tailwind CSS (010-selection-ui)
+- Reads/writes project.json on filesystem, reads thumbnails from Immich API (010-selection-ui)
 
 ## Recent Changes
 - 005-smart-photo-selection: Smart photo/video selection pipeline with quality scoring (faces, relevance, diversity, resolution), burst dedup, scene detection, budget allocation, visual preview via Immich albums. Video output quality: CRF 18, 5+ Mbps, 30fps, sips quality 100.

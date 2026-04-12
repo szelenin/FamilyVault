@@ -5,6 +5,13 @@
 **Status**: Draft  
 **Input**: IMP-013 from PRD — review selected items, add notes, AI interprets for storytelling.
 
+## Clarifications
+
+### Session 2026-04-12
+
+- Q: How does "Generate Now" communicate with Claude? → A: Per core philosophy (CLAUDE.md): UI is a tool, AI is the orchestrator, project.json is shared state. The button writes state to project.json. The user returns to the AI conversation. The AI reads project.json and proceeds. No direct API call or webhook needed.
+- Q: Do we need Web Speech API for voice notes? → A: No. A text field is enough — mobile keyboards (iOS/Android) have built-in mic button for speech-to-text. No custom voice recording needed. FR-005 removed.
+
 ## Context
 
 After the user selects photos/videos in Screen 1 (310+ items narrowed to ~40-50 by AI budget), they need a way to:
@@ -115,9 +122,8 @@ When the user finishes selecting in Screen 1, the UI guides them to the next ste
 - **FR-001**: Screen 2 accessible at `/project/{id}/timeline` in the Selection UI app.
 - **FR-002**: Shows selected items in timeline order as a vertical scrollable list.
 - **FR-003**: Each item shows: thumbnail, position, scene label, duration, note indicator (if note exists).
-- **FR-004**: Tap item opens annotation panel: larger preview, text input, voice record button.
-- **FR-005**: Voice notes transcribed to text via browser Speech Recognition API. Only text stored, not audio.
-- **FR-006**: Notes stored in project.json as `"notes": {"asset_id": "text..."}` dict.
+- **FR-004**: Tap item opens annotation panel: larger preview, text input field. Mobile keyboard's built-in mic handles speech-to-text natively.
+- **FR-005**: Notes stored in project.json as `"notes": {"asset_id": "text..."}` dict.
 - **FR-007**: AI reads notes during video generation and adjusts pacing, captions, transitions.
 - **FR-008**: Video trim controls: start/end sliders or time inputs.
 - **FR-009**: Drag-and-drop reorder of timeline items.
