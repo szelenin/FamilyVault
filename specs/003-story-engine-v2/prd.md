@@ -314,9 +314,9 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | DONE (006) | Quick fix, high impact |
 | 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery, AI-driven budget |
-| 5 | **IMP-012**: Assembler Refactor | Not started | HIGH — v2 project.json support, video clips, DNG handling |
-| 6 | **IMP-007**: Timeline Editing UX | Not started | Better referencing, stable preview links |
-| 6 | **IMP-011**: GPS Recovery | Not started | HIGH PRIORITY — 80% of trip photos have no GPS due to iCloud Shared Library stripping. Blocks location discovery. |
+| 5 | **IMP-012**: Assembler Refactor | DONE (009) | v2 project.json, video clips, DNG, orientation, audio sync |
+| 6 | **IMP-007**: Selection UI (Screen 1) | DONE (010) | SvelteKit PWA, scene browsing, photo grid, select/deselect |
+| 6 | **IMP-011**: osxphotos Export Fix | Not started | HIGH — GPS recovery + ProRAW HEIC export + orientation fix |
 | 7 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. |
 | 8 | **IMP-008**: Favorites Priority | Not started | Leverages user curation — requires IMP-010 to have favorites in Immich |
 | 8 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
