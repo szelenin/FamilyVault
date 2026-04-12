@@ -112,7 +112,20 @@ discovery["preview"] = {"album_id": preview["album_id"], "share_key": preview["s
 set_discovery(project["id"], discovery, stories_dir=stories_dir)
 ```
 
-Present ALL scenes in a numbered list with: label, date+time, photo count, video count, city, and [MUST-HAVE] tags. Then the preview link. Then options.
+Present ALL scenes in a numbered list with: label, date+time, photo count, video count, city, and [MUST-HAVE] tags.
+
+Then give the user the **Selection UI link** for browsing and curating:
+
+```
+Browse and select your photos:
+http://macmini:3000/project/PROJECT_ID
+
+Open on your phone — tap scenes to browse, tap photos to select/deselect.
+Use "Videos Only" / "Photos Only" to filter. Tap a photo for full-screen preview.
+Tell me "selection is ready" when you're done.
+```
+
+The Selection UI reads/writes `deselected_ids` in project.json. When the user says "done" or "selection is ready", read the project.json to see what they selected and proceed to Phase B.
 
 ### Step 7: User Confirms Scenes
 

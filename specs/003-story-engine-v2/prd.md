@@ -194,21 +194,43 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
-### IMP-011: GPS Recovery for Shared Library Photos
+### IMP-011: osxphotos Export Fix — GPS, ProRAW, Orientation
 
-**Problem**: iCloud Shared Photo Library photos from the non-owner device (e.g., wife's iPhone 15 Pro) lose GPS coordinates when synced. The files exported by osxphotos have camera make/model in EXIF but NO GPS latitude/longitude. Photos.app shows these photos on the map (it has the location in its database), but the exported file EXIF doesn't contain it. This affects 80%+ of trip photos in the library, making GPS-based location discovery nearly useless.
+**Problem**: The current osxphotos export has multiple data quality issues that affect the entire pipeline:
 
-**Root cause**: iCloud Shared Photo Library strips GPS from shared copies. Files with `(1)` or `(2)` suffix in the export are shared copies with missing GPS. Original files (no suffix) retain GPS.
+1. **Missing GPS** — iCloud Shared Photo Library strips GPS from shared copies. 80%+ of trip photos have no GPS.
+2. **Dark ProRAW photos** — DNG (raw) files exported WITHOUT the processed HEIC version. 977 DNG files look dark because they're unprocessed raw data. Photos.app shows the processed version which looks correct.
+3. **Flipped photos/videos** — Some shared library exports have incorrect EXIF orientation.
+4. **Missing processed HEIC** — osxphotos exported DNG + sidecars but NOT the processed HEIC alongside it. Immich only has the raw version.
 
-**Evidence from Miami trip**: 16 out of 20 sampled assets had no GPS. All GPS-missing files were iPhone 15 Pro (shared library). All GPS-present files were iPhone 13 Pro (library owner).
+**Root causes**:
+- iCloud Shared Photo Library strips GPS from shared copies (files with `(1)` suffix)
+- Photos.app has GPS in its database but exported file EXIF doesn't contain it
+- osxphotos export command didn't include processed versions alongside raw DNG
+- EXIF orientation may be wrong on shared library copies
+
+**Evidence**: 
+- 16/20 sampled Miami trip assets had no GPS (all iPhone 15 Pro shared copies)
+- 977 DNG files = dark photos (17% of library), processed HEIC missing from disk
+- IMG_5909: DNG exists, HEIC sidecars exist, but HEIC file itself not exported
 
 **Requirements**:
-- R056: During osxphotos export, use `--exiftool` flag to write Photos.app location data into exported files' EXIF. Photos.app has the GPS (it shows the map), so osxphotos should be able to write it back.
-- R057: If `--exiftool` doesn't recover GPS for shared library photos, implement a post-export script that queries osxphotos Python API for each photo's location and writes it into the file using exiftool.
-- R058: After GPS recovery, re-trigger Immich library scan to re-index the updated EXIF data.
-- R059: Verify GPS recovery by checking a sample of previously GPS-missing assets in Immich after re-scan.
+- R056: osxphotos export MUST export both the processed HEIC AND the raw DNG for ProRAW photos. Immich should index the HEIC (looks correct) while DNG is preserved as archive.
+- R057: Use `--exiftool` flag to write Photos.app GPS data into exported files' EXIF. If Photos.app doesn't have GPS for shared copies, implement GPS inference from nearby photos (same time = same location).
+- R058: Verify correct EXIF orientation on all exported files. Fix flipped files with exiftool if needed.
+- R059: After re-export, re-trigger Immich library scan to re-index updated files.
+- R060: Separate storage paths: processed files → Immich library, DNG/raw → archive folder (not indexed by Immich to avoid duplicates).
+- R061: Verify fix by checking a sample of previously dark/GPS-missing/flipped assets.
 
-**Priority**: HIGH — this blocks accurate location discovery (IMP-006) and multi-signal scoring (IMP-006 R052). Should be implemented before or alongside IMP-010 metadata sync.
+**Research needed before implementation**:
+- How does Immich handle two files for the same photo (DNG + HEIC)? Does it show duplicates or can it stack/link them?
+- If both are indexed, which one does Immich use for thumbnails and previews?
+- If the story engine selects a photo, which version (DNG vs HEIC) gets used in the clip? How do we ensure the processed HEIC is used for video assembly, not the dark DNG?
+- Does Immich's stacking feature (if available in v2.6.3) support linking raw + processed versions?
+- If we use DNG in the video clip, does FFmpeg apply any tone mapping or does it look dark? Do we need a separate tone-mapping step in the assembler?
+- What is the best Immich configuration: index both in same library, or HEIC in library + DNG in separate archive not indexed?
+
+**Priority**: HIGH — blocks accurate location discovery, correct photo display, and video quality. Should be done before IMP-010 metadata sync.
 
 ---
 
@@ -228,6 +250,38 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 - R066: NEVER crop photos. Preserve the full original content of every photo. The user must see everything that was in the original photo — no edges cut off. Clarifying questions about aspect ratio handling to be asked during spec phase.
 
 **Priority**: HIGH — blocks video generation with the new v2 pipeline.
+
+---
+
+### IMP-014: Duplicate Detection
+
+**Problem**: The photo library contains duplicate or near-duplicate photos from multiple sources: iCloud Shared Library creates copies (files with `(1)` suffix), Google Takeout may contain the same photos, and burst shots produce near-identical images. Users see duplicates in the selection UI and the AI includes them in clips.
+
+**Requirements**:
+- R073: Detect exact duplicates by file checksum (MD5/SHA256). Keep one, mark others as duplicates.
+- R074: Detect near-duplicates by thumbhash Hamming distance (threshold ≤ 3 bits) or perceptual hash. Keep the highest quality version.
+- R075: Phase 1 — photos only. Phase 2 — extend to videos (compare first frame or file hash).
+- R076: During scene discovery, automatically hide duplicates from the selection UI. Show count: "5 duplicates hidden."
+- R077: User can view hidden duplicates if they want to override the auto-selection.
+- R078: In the generated clip, never include two versions of the same photo.
+
+**Priority**: MEDIUM — improves selection quality and reduces clutter. Not blocking but noticeable with 313 selected items.
+
+---
+
+### IMP-013: Timeline Review Screen (Screen 2)
+
+**Problem**: After selecting content in Screen 1, the user needs a way to review the AI's arrangement, add notes/tags, trim videos, adjust speed, and provide detailed instructions per item. This is too detailed for the scene selection grid (Screen 1) and too complex for Claude's text interface.
+
+**Requirements**:
+- R067: Screen 2 shows only SELECTED items from Screen 1, arranged in timeline order.
+- R068: Per-item controls: voice note, text note, star/priority, custom tags.
+- R069: Video-specific: trim start/end, speed adjustment (slow-mo, fast), keep/mute audio.
+- R070: AI interprets annotations to build the final video — notes become instructions ("hero shot" → longer duration, "slow-mo" → speed reduction).
+- R071: User can reorder items by drag-and-drop.
+- R072: Optional — skip Screen 2 entirely and go straight to generate from Screen 1.
+
+**Depends on**: IMP-007 (Screen 1 must be working first).
 
 ---
 
