@@ -194,21 +194,35 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
-### IMP-011: GPS Recovery for Shared Library Photos
+### IMP-011: osxphotos Export Fix — GPS, ProRAW, Orientation
 
-**Problem**: iCloud Shared Photo Library photos from the non-owner device (e.g., wife's iPhone 15 Pro) lose GPS coordinates when synced. The files exported by osxphotos have camera make/model in EXIF but NO GPS latitude/longitude. Photos.app shows these photos on the map (it has the location in its database), but the exported file EXIF doesn't contain it. This affects 80%+ of trip photos in the library, making GPS-based location discovery nearly useless.
+**Problem**: The current osxphotos export has multiple data quality issues that affect the entire pipeline:
 
-**Root cause**: iCloud Shared Photo Library strips GPS from shared copies. Files with `(1)` or `(2)` suffix in the export are shared copies with missing GPS. Original files (no suffix) retain GPS.
+1. **Missing GPS** — iCloud Shared Photo Library strips GPS from shared copies. 80%+ of trip photos have no GPS.
+2. **Dark ProRAW photos** — DNG (raw) files exported WITHOUT the processed HEIC version. 977 DNG files look dark because they're unprocessed raw data. Photos.app shows the processed version which looks correct.
+3. **Flipped photos/videos** — Some shared library exports have incorrect EXIF orientation.
+4. **Missing processed HEIC** — osxphotos exported DNG + sidecars but NOT the processed HEIC alongside it. Immich only has the raw version.
 
-**Evidence from Miami trip**: 16 out of 20 sampled assets had no GPS. All GPS-missing files were iPhone 15 Pro (shared library). All GPS-present files were iPhone 13 Pro (library owner).
+**Root causes**:
+- iCloud Shared Photo Library strips GPS from shared copies (files with `(1)` suffix)
+- Photos.app has GPS in its database but exported file EXIF doesn't contain it
+- osxphotos export command didn't include processed versions alongside raw DNG
+- EXIF orientation may be wrong on shared library copies
+
+**Evidence**: 
+- 16/20 sampled Miami trip assets had no GPS (all iPhone 15 Pro shared copies)
+- 977 DNG files = dark photos (17% of library), processed HEIC missing from disk
+- IMG_5909: DNG exists, HEIC sidecars exist, but HEIC file itself not exported
 
 **Requirements**:
-- R056: During osxphotos export, use `--exiftool` flag to write Photos.app location data into exported files' EXIF. Photos.app has the GPS (it shows the map), so osxphotos should be able to write it back.
-- R057: If `--exiftool` doesn't recover GPS for shared library photos, implement a post-export script that queries osxphotos Python API for each photo's location and writes it into the file using exiftool.
-- R058: After GPS recovery, re-trigger Immich library scan to re-index the updated EXIF data.
-- R059: Verify GPS recovery by checking a sample of previously GPS-missing assets in Immich after re-scan.
+- R056: osxphotos export MUST export both the processed HEIC AND the raw DNG for ProRAW photos. Immich should index the HEIC (looks correct) while DNG is preserved as archive.
+- R057: Use `--exiftool` flag to write Photos.app GPS data into exported files' EXIF. If Photos.app doesn't have GPS for shared copies, implement GPS inference from nearby photos (same time = same location).
+- R058: Verify correct EXIF orientation on all exported files. Fix flipped files with exiftool if needed.
+- R059: After re-export, re-trigger Immich library scan to re-index updated files.
+- R060: Separate storage paths: processed files → Immich library, DNG/raw → archive folder (not indexed by Immich to avoid duplicates).
+- R061: Verify fix by checking a sample of previously dark/GPS-missing/flipped assets.
 
-**Priority**: HIGH — this blocks accurate location discovery (IMP-006) and multi-signal scoring (IMP-006 R052). Should be implemented before or alongside IMP-010 metadata sync.
+**Priority**: HIGH — blocks accurate location discovery, correct photo display, and video quality. Should be done before IMP-010 metadata sync.
 
 ---
 
