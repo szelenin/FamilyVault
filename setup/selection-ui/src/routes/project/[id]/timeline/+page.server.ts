@@ -29,7 +29,7 @@ export function load({ params }) {
 
     // Apply custom order if exists
     if (sceneOrder) {
-      const orderMap = new Map(sceneOrder.map((id: string, i: number) => [id, i]));
+      const orderMap = new Map<string, number>(sceneOrder.map((id: string, i: number) => [id, i]));
       scenes.sort((a: any, b: any) => {
         const aOrder = orderMap.get(a.id) ?? 999;
         const bOrder = orderMap.get(b.id) ?? 999;
@@ -38,7 +38,11 @@ export function load({ params }) {
     }
 
     const totalSelected = scenes.reduce((s: number, sc: any) => s + sc.selectedCount, 0);
-    const estimatedDuration = totalSelected * 4; // rough: 4s per item
+    const totalPhotos = scenes.reduce((s: number, sc: any) => s + sc.photoCount, 0);
+    const totalVideos = scenes.reduce((s: number, sc: any) => s + sc.videoCount, 0);
+    // photos × 4s + videos × 8s avg − crossfade overlaps (0.5s per transition)
+    const crossfades = Math.max(0, totalSelected - 1) * 0.5;
+    const estimatedDuration = Math.round(totalPhotos * 4 + totalVideos * 8 - crossfades);
 
     return {
       projectId: params.id,

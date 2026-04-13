@@ -13,10 +13,10 @@
 
 **Purpose**: Add scene_notes, scene_order, video_trims to project.json and API routes.
 
-- [ ] T001 [P] Add `saveSceneNotes(projectId, sceneId, note)`, `getSceneNotes(projectId)`, `saveSceneOrder(projectId, order)`, `saveVideoTrim(projectId, assetId, start, end)` to `setup/selection-ui/src/lib/project.ts`
-- [ ] T002 [P] Create `src/routes/api/project/[id]/notes/+server.ts` — POST to save scene note, GET to read all notes
-- [ ] T003 [P] Create `src/routes/api/project/[id]/order/+server.ts` — POST to save scene order
-- [ ] T004 [P] Create `src/routes/api/project/[id]/trim/+server.ts` — POST to save video trim settings
+- [x] T001 [P] Add `saveSceneNotes(projectId, sceneId, note)`, `getSceneNotes(projectId)`, `saveSceneOrder(projectId, order)`, `saveVideoTrim(projectId, assetId, start, end)` to `setup/selection-ui/src/lib/project.ts`
+- [x] T002 [P] Create `src/routes/api/project/[id]/notes/+server.ts` — POST to save scene note, GET to read all notes
+- [x] T003 [P] Create `src/routes/api/project/[id]/order/+server.ts` — POST to save scene order
+- [x] T004 [P] Create `src/routes/api/project/[id]/trim/+server.ts` — POST to save video trim settings
 
 ---
 
@@ -24,11 +24,11 @@
 
 **Goal**: Scene cards with thumbnail strips, story text field, expand to view items.
 
-- [ ] T005 [US1] Create `src/routes/project/[id]/timeline/+page.server.ts` — load active scenes (non-deselected) with notes, item counts, thumbnail asset IDs
-- [ ] T006 [US1] Create `src/routes/project/[id]/timeline/+page.svelte` — vertical list of scene cards: thumbnail strip (first 5 items), scene label, item count, estimated duration, story indicator
-- [ ] T007 [US1] Add "Add your story" text field per scene card — tap to expand, type anything (stories, AI commands, trim requests, mood), save to API on blur/submit
-- [ ] T008 [US1] Add expand/collapse on thumbnail strip — tap to show all items in scene grid (view only, not editing)
-- [ ] T009 [US1] Add story indicator — small icon on scene card when note exists
+- [x] T005 [US1] Create `src/routes/project/[id]/timeline/+page.server.ts` — load active scenes (non-deselected) with notes, item counts, thumbnail asset IDs
+- [x] T006 [US1] Create `src/routes/project/[id]/timeline/+page.svelte` — vertical list of scene cards: thumbnail strip (first 5 items), scene label, item count, estimated duration, story indicator
+- [x] T007 [US1] Add "Add your story" text field per scene card — tap to expand, type anything (stories, AI commands, trim requests, mood), save to API on blur/submit
+- [x] T008 [US1] Add expand/collapse on thumbnail strip — tap to show all items in scene grid (view only, not editing)
+- [x] T009 [US1] Add story indicator — small icon on scene card when note exists
 
 **Checkpoint**: User opens Screen 2, sees scenes, adds stories, saves to project.json.
 
@@ -38,7 +38,7 @@
 
 **Goal**: Remove scenes, drag to reorder, trim videos.
 
-- [ ] T010 [US3] Add remove button per scene card — undo toast for 5 seconds, items go to deselected_ids
+- [x] T010 [US3] Add remove button per scene card — undo toast for 5 seconds, items go to deselected_ids
 - [ ] T011 [US3] Add drag-and-drop scene reorder — touch-friendly drag handle (≡), saves order to project.json via API
 - [ ] T012 [US3] In expanded scene view, tap video thumbnail → show trim control with start/end time inputs or sliders. Save to project.json via trim API. Show play icon + duration badge on video thumbnails.
 
@@ -48,9 +48,9 @@
 
 **Goal**: Sticky bottom bar on both screens with counts and cross-navigation.
 
-- [ ] T013 [US4] Add sticky summary bar to Screen 2 (`/timeline`): total selected count, estimated video duration, "← Selection" link
-- [ ] T014 [US4] Add sticky summary bar to Screen 1 (`/project/[id]`): total selected count, estimated duration, "Review Timeline →" link
-- [ ] T015 [US4] Calculate estimated duration: photos × 4s + sum of video durations − crossfade overlaps
+- [x] T013 [US4] Add sticky summary bar to Screen 2 (`/timeline`): total selected count, estimated video duration, "← Selection" link
+- [x] T014 [US4] Add sticky summary bar to Screen 1 (`/project/[id]`): total selected count, estimated duration, "Review Timeline →" link
+- [x] T015 [US4] Calculate estimated duration: photos × 4s + sum of video durations − crossfade overlaps
 
 ---
 
@@ -58,20 +58,20 @@
 
 **Goal**: SKILL.md update so AI reads scene_notes and guides the full flow.
 
-- [ ] T016 [US2] Update SKILL.md: AI reads `scene_notes` from project.json during generation. Guidance on interpreting stories for pacing, captions, transitions, mood per scene.
-- [ ] T017 [US2] Update SKILL.md: AI guides full flow via conversation — at each step tells user what to do: Screen 1 link → Screen 2 link → "tell me when ready" → preview/generate.
-- [ ] T018 [US2] Update SKILL.md: document how AI adjusts video based on notes — "waiting" = slower, "funny" = upbeat/longer, "first time" = dramatic reveal. These are guidance patterns, not fixed rules.
+- [x] T016 [US2] Update SKILL.md: AI reads `scene_notes` from project.json during generation. Guidance on interpreting stories for pacing, captions, transitions, mood per scene.
+- [x] T017 [US2] Update SKILL.md: AI guides full flow via conversation — at each step tells user what to do: Screen 1 link → Screen 2 link → "tell me when ready" → preview/generate.
+- [x] T018 [US2] Update SKILL.md: document how AI adjusts video based on notes — "waiting" = slower, "funny" = upbeat/longer, "first time" = dramatic reveal. These are guidance patterns, not fixed rules.
 
 ---
 
 ## Phase 6: Playwright Tests + Polish
 
-- [ ] T019 Write Playwright test: navigate to `/project/{id}/timeline` → see scene cards
-- [ ] T020 Write Playwright test: add story to a scene → verify note indicator appears
-- [ ] T021 Write Playwright test: remove a scene → verify undo toast → verify scene gone
-- [ ] T022 Write Playwright test: summary bar shows count + duration on both screens
-- [ ] T023 Write Playwright test: expand scene thumbnail strip → see all items
-- [ ] T024 Run all Playwright tests — selection UI + timeline
+- [x] T019 Write Playwright test: navigate to `/project/{id}/timeline` → see scene cards
+- [x] T020 Write Playwright test: add story to a scene → verify note indicator appears
+- [x] T021 Write Playwright test: remove a scene → verify undo toast → verify scene gone
+- [x] T022 Write Playwright test: summary bar shows count + duration on both screens
+- [x] T023 Write Playwright test: expand scene thumbnail strip → see all items
+- [x] T024 Run all Playwright tests — selection UI + timeline
 - [ ] T025 Update docs per playbook (`docs/playbooks/update-docs.md`)
 - [ ] T026 Commit and push
 

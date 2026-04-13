@@ -125,7 +125,20 @@ Use "Videos Only" / "Photos Only" to filter. Tap a photo for full-screen preview
 Tell me "selection is ready" when you're done.
 ```
 
-The Selection UI reads/writes `deselected_ids` in project.json. When the user says "done" or "selection is ready", read the project.json to see what they selected and proceed to Phase B.
+The Selection UI reads/writes `deselected_ids` in project.json. When the user says "done" or "selection is ready", read the project.json to see what they selected.
+
+**After selection, suggest Screen 2 for story annotation:**
+
+```
+Now add stories to your scenes — tell the AI what each moment means to you:
+http://macmini:3000/project/PROJECT_ID/timeline
+
+Tap "Add your story" on any scene. Type anything: memories, mood, AI instructions.
+Examples: "highlight of the trip!", "this was emotional", "make it fast and exciting"
+You can also remove scenes you don't want. Tell me when you're done.
+```
+
+Screen 2 writes `scene_notes` and `scene_order` to project.json. When the user says "done" or "stories are ready", read project.json for both `deselected_ids` and `scene_notes`, then proceed to Phase B.
 
 ### Step 7: User Confirms Scenes
 
@@ -140,8 +153,18 @@ Use Immich API directly to update the album:
 
 ### Step 8: Phase B — Build Timeline
 
+**Read scene_notes from project.json** before building the timeline. The user may have added story annotations on Screen 2 that should influence your creative decisions.
+
 **Budget is AI-driven, not formula-driven.** You decide how many items each scene gets based on:
 - **User's intent**: must-have scenes get more, filler scenes get less
+- **Scene notes**: annotated scenes deserve more attention. Read each note and reason about it:
+  - "highlight of the trip!" → more items, longer duration
+  - "this was emotional" → slower pacing, longer holds on photos
+  - "funny moment" → upbeat transitions, possibly a text caption
+  - "make it fast and exciting" → quick cuts, shorter duration per item
+  - "we waited 2 hours" → slower pacing to convey waiting
+  - "skip the boring part of the big video" → trim the video (use `video_trims` from project.json if set, or interpret the note)
+  - Scenes with no notes get standard treatment
 - **Scene richness**: a scene with 194 items (Vizcaya) deserves more than a scene with 4 items (lizard catch) — but the lizard scene is a key moment, so give it enough
 - **Content type**: a speedboat scene with 38 videos needs more slots than a quiet morning with 5 photos
 - **Clip duration target**: reason about total clip length. 30 items ≈ 2 min, 50 items ≈ 4 min. Ask yourself: what feels right for this trip?
@@ -188,6 +211,7 @@ Tell the user your reasoning: "Built timeline: 40 items (~3 min). Vizcaya 12, Sp
 | "include all" | Confirm all scenes, proceed to Phase B |
 | "make it shorter" | Reduce budget, re-select |
 | "replace #3" / "remove IMG_7280" / "the 6pm photo" | Accept any reference and resolve |
+| "I added stories on Screen 2" / "stories are ready" | Read `scene_notes` from project.json, incorporate into Phase B budget and creative decisions |
 | "start over" | Reset project |
 
 ## Preview Album Rules
