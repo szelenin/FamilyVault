@@ -8,10 +8,34 @@
   let noteText = $state("");
   let saving = $state(false);
 
+  // Detail overlay state
+  let detailItem = $state<{asset_id: string, type: string, duration: string | null} | null>(null);
+  let detailIndex = $state(-1);
+  let detailSceneId = $state<string | null>(null);
+  let sceneItemsCache = $state<Record<string, Array<{asset_id: string, type: string, duration: string | null}>>>({});
+  let loadingDetails = $state<string | null>(null);
+
+  // Item deselect undo state
+  let itemUndoToast = $state<{sceneId: string, assetId: string} | null>(null);
+  let itemUndoTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Trim state
+  let trimming = $state(false);
+  let trimStart = $state(0);
+  let trimEnd = $state(0);
+  let trimDuration = $state(0);
+  let videoEl: HTMLVideoElement | null = null;
+
   function formatDuration(seconds: number): string {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+  }
+
+  function formatTrimTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, "0")}`;
   }
 
   async function saveNote(sceneId: string) {
@@ -33,20 +57,51 @@
   }
 
   function toggleExpand(sceneId: string) {
-    expandedScene = expandedScene === sceneId ? null : sceneId;
+    if (expandedScene === sceneId) {
+      expandedScene = null;
+    } else {
+      expandedScene = sceneId;
+      fetchSceneDetails(sceneId);
+    }
+  }
+
+  async function fetchSceneDetails(sceneId: string) {
+    if (sceneItemsCache[sceneId]) return;
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+    loadingDetails = sceneId;
+    const items: Array<{asset_id: string, type: string, duration: string | null}> = [];
+    // Fetch in parallel batches of 10
+    for (let i = 0; i < scene.selectedIds.length; i += 10) {
+      const batch = scene.selectedIds.slice(i, i + 10);
+      const results = await Promise.all(
+        batch.map(async (id: string) => {
+          try {
+            const resp = await fetch(`/api/asset/${id}/info`);
+            const info = await resp.json();
+            return { asset_id: id, type: info.type, duration: info.duration };
+          } catch {
+            return { asset_id: id, type: "IMAGE", duration: null };
+          }
+        })
+      );
+      items.push(...results);
+    }
+    sceneItemsCache[sceneId] = items;
+    sceneItemsCache = { ...sceneItemsCache }; // trigger reactivity
+    loadingDetails = null;
   }
 
   async function removeScene(sceneId: string) {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
-    
+
     const removedScene = { ...scene };
     scenes = scenes.filter(s => s.id !== sceneId);
     removedToast = { id: sceneId, label: scene.label || scene.id };
 
     if (undoTimer) clearTimeout(undoTimer);
     undoTimer = setTimeout(async () => {
-      // Persist: add scene assets to deselected_ids
       const resp = await fetch(`/api/project/${data.projectId}`);
       const project = await resp.json();
       const current = new Set(project.deselected_ids || []);
@@ -68,11 +123,196 @@
     removedToast = null;
   }
 
+  // --- Detail overlay ---
+
+  function openDetail(sceneId: string, index: number) {
+    const items = sceneItemsCache[sceneId];
+    if (!items || !items[index]) return;
+    detailSceneId = sceneId;
+    detailIndex = index;
+    detailItem = items[index];
+    trimming = false;
+  }
+
+  function closeDetail() {
+    detailItem = null;
+    detailIndex = -1;
+    detailSceneId = null;
+    trimming = false;
+  }
+
+  function prevDetail() {
+    if (!detailSceneId || detailIndex <= 0) return;
+    detailIndex--;
+    detailItem = sceneItemsCache[detailSceneId][detailIndex];
+    trimming = false;
+  }
+
+  function nextDetail() {
+    if (!detailSceneId) return;
+    const items = sceneItemsCache[detailSceneId];
+    if (detailIndex >= items.length - 1) return;
+    detailIndex++;
+    detailItem = items[detailIndex];
+    trimming = false;
+  }
+
+  function currentSceneItems() {
+    if (!detailSceneId) return [];
+    return sceneItemsCache[detailSceneId] || [];
+  }
+
+  // --- Item deselect ---
+
+  async function deselectItem(sceneId: string, assetId: string) {
+    // Close detail if we're deselecting the current item
+    if (detailItem && detailItem.asset_id === assetId) {
+      const items = sceneItemsCache[sceneId];
+      if (items && items.length > 1) {
+        // Advance to next or prev
+        if (detailIndex < items.length - 1) {
+          // Will shift down after removal, so same index points to next
+        } else {
+          detailIndex = Math.max(0, detailIndex - 1);
+        }
+      } else {
+        closeDetail();
+      }
+    }
+
+    // Remove from scene
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+    scene.selectedIds = scene.selectedIds.filter((id: string) => id !== assetId);
+    scene.selectedCount = scene.selectedIds.length;
+
+    // Update cache
+    if (sceneItemsCache[sceneId]) {
+      sceneItemsCache[sceneId] = sceneItemsCache[sceneId].filter(i => i.asset_id !== assetId);
+      sceneItemsCache = { ...sceneItemsCache };
+      // Update detail view
+      if (detailSceneId === sceneId && sceneItemsCache[sceneId].length > 0) {
+        detailIndex = Math.min(detailIndex, sceneItemsCache[sceneId].length - 1);
+        detailItem = sceneItemsCache[sceneId][detailIndex];
+      }
+    }
+
+    // Update photo/video counts (approximate — decrement based on removed type)
+    const cached = sceneItemsCache[sceneId]?.find(i => i.asset_id === assetId);
+    // Already removed from cache, so check original info
+    // Just recalc from cache
+    if (sceneItemsCache[sceneId]) {
+      scene.photoCount = sceneItemsCache[sceneId].filter(i => i.type === "IMAGE").length;
+      scene.videoCount = sceneItemsCache[sceneId].filter(i => i.type === "VIDEO").length;
+    }
+
+    scenes = [...scenes]; // trigger reactivity
+
+    // If scene is now empty, remove it
+    if (scene.selectedIds.length === 0) {
+      scenes = scenes.filter(s => s.id !== sceneId);
+      closeDetail();
+    }
+
+    // Show undo toast
+    itemUndoToast = { sceneId, assetId };
+    if (itemUndoTimer) clearTimeout(itemUndoTimer);
+    itemUndoTimer = setTimeout(async () => {
+      // Persist
+      const resp = await fetch(`/api/project/${data.projectId}`);
+      const project = await resp.json();
+      const current = new Set(project.deselected_ids || []);
+      current.add(assetId);
+      await fetch(`/api/project/${data.projectId}/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deselected_ids: [...current] }),
+      });
+      itemUndoToast = null;
+    }, 3000);
+  }
+
+  function undoItemDeselect() {
+    if (!itemUndoToast) return;
+    if (itemUndoTimer) clearTimeout(itemUndoTimer);
+    const { sceneId, assetId } = itemUndoToast;
+    // Restore to scene
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) {
+      // Scene was removed (was last item) — restore from data
+      const origScene = data.scenes.find(s => s.id === sceneId);
+      if (origScene) {
+        const restored = { ...origScene, selectedIds: [assetId], selectedCount: 1 };
+        scenes = [...scenes, restored];
+      }
+    } else {
+      scene.selectedIds = [...scene.selectedIds, assetId];
+      scene.selectedCount = scene.selectedIds.length;
+      scenes = [...scenes];
+    }
+    // Restore to cache
+    if (sceneItemsCache[sceneId]) {
+      // Re-add with unknown type (will refresh on next expand)
+      sceneItemsCache[sceneId] = [...sceneItemsCache[sceneId], { asset_id: assetId, type: "IMAGE", duration: null }];
+      sceneItemsCache = { ...sceneItemsCache };
+    }
+    itemUndoToast = null;
+  }
+
+  // --- Video trim ---
+
+  function startTrim() {
+    if (!detailItem || detailItem.type !== "VIDEO") return;
+    trimming = true;
+    // Parse duration string "HH:MM:SS" or seconds
+    const dur = parseDuration(detailItem.duration);
+    trimDuration = dur;
+    // Check existing trim
+    const existing = data.videoTrims?.[detailItem.asset_id];
+    trimStart = existing?.start ?? 0;
+    trimEnd = existing?.end ?? dur;
+  }
+
+  function parseDuration(d: string | null): number {
+    if (!d) return 30; // default
+    // "0:00:05.123" or "00:05" or just seconds
+    const parts = d.split(":");
+    if (parts.length === 3) return +parts[0] * 3600 + +parts[1] * 60 + parseFloat(parts[2]);
+    if (parts.length === 2) return +parts[0] * 60 + parseFloat(parts[1]);
+    return parseFloat(d) || 30;
+  }
+
+  async function saveTrim() {
+    if (!detailItem) return;
+    await fetch(`/api/project/${data.projectId}/trim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asset_id: detailItem.asset_id, start: trimStart, end: trimEnd }),
+    });
+    // Update local state
+    if (!data.videoTrims) data.videoTrims = {};
+    data.videoTrims[detailItem.asset_id] = { start: trimStart, end: trimEnd };
+    trimming = false;
+  }
+
+  function cancelTrim() {
+    trimming = false;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (!detailItem) return;
+    if (e.key === "Escape") { if (trimming) cancelTrim(); else closeDetail(); }
+    if (e.key === "ArrowLeft" && !trimming) prevDetail();
+    if (e.key === "ArrowRight" && !trimming) nextDetail();
+  }
+
   const totalSelected = $derived(scenes.reduce((s, sc) => s + sc.selectedCount, 0));
   const totalPhotos = $derived(scenes.reduce((s, sc) => s + sc.photoCount, 0));
   const totalVideos = $derived(scenes.reduce((s, sc) => s + sc.videoCount, 0));
   const estimatedSec = $derived(Math.round(totalPhotos * 4 + totalVideos * 8 - Math.max(0, totalSelected - 1) * 0.5));
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="mb-4">
   <a href="/project/{data.projectId}" class="text-blue-400 text-sm" data-testid="back-to-selection">&larr; Selection</a>
@@ -106,23 +346,59 @@
         </button>
       </div>
 
-      <!-- Thumbnail strip -->
-      <button class="px-3 pb-2 cursor-pointer w-full text-left" data-testid="thumbnail-strip" onclick={() => toggleExpand(scene.id)}>
-        <div class="flex gap-1 overflow-hidden" class:flex-wrap={expandedScene === scene.id}>
-          {#each expandedScene === scene.id ? scene.selectedIds : scene.selectedIds.slice(0, 5) as assetId}
-            <img src="/api/thumbnail/{assetId}"
-                 alt="" class="w-14 h-14 object-cover rounded shrink-0" loading="lazy" />
-          {/each}
-          {#if expandedScene !== scene.id && scene.selectedIds.length > 5}
-            <div class="w-14 h-14 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400 shrink-0">
-              +{scene.selectedIds.length - 5}
-            </div>
+      <!-- Thumbnail strip / expanded grid -->
+      {#if expandedScene === scene.id}
+        <div class="px-3 pb-2">
+          <div class="flex gap-1 flex-wrap">
+            {#each scene.selectedIds as assetId, i}
+              <div class="relative w-14 h-14 shrink-0">
+                <img src="/api/thumbnail/{assetId}"
+                     alt="" class="w-full h-full object-cover rounded cursor-pointer" loading="lazy"
+                     onclick={() => openDetail(scene.id, i)}
+                     data-testid="expanded-thumbnail" />
+                <!-- X deselect button -->
+                <button class="absolute -top-1 -right-1 w-5 h-5 bg-black/80 rounded-full flex items-center justify-center text-xs text-gray-300 hover:text-red-400"
+                        onclick={(e) => { e.stopPropagation(); deselectItem(scene.id, assetId); }}
+                        data-testid="deselect-item">✕</button>
+                <!-- Video badge -->
+                {#if sceneItemsCache[scene.id]?.find(it => it.asset_id === assetId)?.type === "VIDEO"}
+                  <div class="absolute bottom-0 right-0 bg-black/70 px-1 py-0.5 rounded-tl text-[10px] flex items-center gap-0.5">
+                    <span>▶</span>
+                    {#if data.videoTrims?.[assetId]}
+                      <span class="text-blue-400">{formatTrimTime(data.videoTrims[assetId].start)}-{formatTrimTime(data.videoTrims[assetId].end)}</span>
+                    {:else}
+                      {#if sceneItemsCache[scene.id]?.find(it => it.asset_id === assetId)?.duration}
+                        <span>{sceneItemsCache[scene.id].find(it => it.asset_id === assetId)?.duration}</span>
+                      {/if}
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+          {#if loadingDetails === scene.id}
+            <div class="text-xs text-gray-500 mt-1">Loading details...</div>
           {/if}
+          <button class="text-xs text-gray-500 mt-1" onclick={() => expandedScene = null}>Collapse</button>
         </div>
-        {#if expandedScene !== scene.id && scene.selectedIds.length > 5}
-          <div class="text-xs text-gray-500 mt-1">Tap to see all {scene.selectedIds.length} items</div>
-        {/if}
-      </button>
+      {:else}
+        <button class="px-3 pb-2 cursor-pointer w-full text-left" data-testid="thumbnail-strip" onclick={() => toggleExpand(scene.id)}>
+          <div class="flex gap-1 overflow-hidden">
+            {#each scene.selectedIds.slice(0, 5) as assetId}
+              <img src="/api/thumbnail/{assetId}"
+                   alt="" class="w-14 h-14 object-cover rounded shrink-0" loading="lazy" />
+            {/each}
+            {#if scene.selectedIds.length > 5}
+              <div class="w-14 h-14 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400 shrink-0">
+                +{scene.selectedIds.length - 5}
+              </div>
+            {/if}
+          </div>
+          {#if scene.selectedIds.length > 5}
+            <div class="text-xs text-gray-500 mt-1">Tap to see all {scene.selectedIds.length} items</div>
+          {/if}
+        </button>
+      {/if}
 
       <!-- Story field -->
       <div class="px-3 pb-3">
@@ -160,11 +436,100 @@
   {/each}
 </div>
 
-<!-- Undo toast -->
+<!-- Detail overlay -->
+{#if detailItem}
+  <div class="fixed inset-0 bg-black z-50 flex flex-col" data-testid="detail-overlay" onclick={closeDetail}>
+    <!-- Top bar -->
+    <div class="flex items-center justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
+      <button onclick={closeDetail} class="text-white text-lg" data-testid="detail-close">✕</button>
+      <span class="text-sm text-gray-400" data-testid="detail-counter">{detailIndex + 1} / {currentSceneItems().length}</span>
+      <button onclick={() => { if (detailSceneId && detailItem) deselectItem(detailSceneId, detailItem.asset_id); }}
+              class="px-3 py-1 bg-red-600/80 rounded-full text-sm font-medium"
+              data-testid="detail-deselect">
+        Remove
+      </button>
+    </div>
+
+    <!-- Media -->
+    <div class="flex-1 flex items-center justify-center overflow-hidden" onclick={(e) => e.stopPropagation()}>
+      {#if detailItem.type === "VIDEO"}
+        <video src="/api/video/{detailItem.asset_id}"
+               poster="/api/thumbnail/{detailItem.asset_id}?size=preview"
+               controls playsinline preload="metadata"
+               bind:this={videoEl}
+               class="max-w-full max-h-full object-contain"
+               data-testid="detail-video" />
+      {:else}
+        <img src="/api/thumbnail/{detailItem.asset_id}?size=preview"
+             alt="" class="max-w-full max-h-full object-contain"
+             data-testid="detail-image" />
+      {/if}
+    </div>
+
+    <!-- Trim controls -->
+    {#if trimming}
+      <div class="p-4 bg-black/90 space-y-3" onclick={(e) => e.stopPropagation()}>
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-gray-400">Trim: {formatTrimTime(trimStart)} — {formatTrimTime(trimEnd)}</span>
+          <span class="text-gray-500">({formatTrimTime(trimEnd - trimStart)})</span>
+        </div>
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-xs text-gray-400">
+            Start
+            <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimStart}
+                   class="flex-1" oninput={() => { if (trimStart >= trimEnd) trimEnd = Math.min(trimStart + 1, trimDuration); if (videoEl) videoEl.currentTime = trimStart; }} />
+          </label>
+          <label class="flex items-center gap-2 text-xs text-gray-400">
+            End
+            <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimEnd}
+                   class="flex-1" oninput={() => { if (trimEnd <= trimStart) trimStart = Math.max(trimEnd - 1, 0); if (videoEl) videoEl.currentTime = trimEnd; }} />
+          </label>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button onclick={cancelTrim} class="px-3 py-1.5 text-xs text-gray-400">Cancel</button>
+          <button onclick={saveTrim} class="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium">Save Trim</button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Navigation -->
+    <div class="flex justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
+      <button onclick={prevDetail}
+              class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === 0}
+              disabled={detailIndex === 0}
+              data-testid="detail-prev">
+        ← Prev
+      </button>
+      {#if detailItem.type === "VIDEO" && !trimming}
+        <button onclick={startTrim}
+                class="px-4 py-2 bg-gray-800 rounded-lg text-sm"
+                data-testid="detail-trim">
+          ✂ Trim
+        </button>
+      {/if}
+      <button onclick={nextDetail}
+              class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === currentSceneItems().length - 1}
+              disabled={detailIndex === currentSceneItems().length - 1}
+              data-testid="detail-next">
+        Next →
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Undo toasts -->
 {#if removedToast}
   <div class="fixed bottom-16 left-4 right-4 bg-gray-800 rounded-lg p-4 flex items-center gap-3 shadow-xl border border-gray-700 z-50">
     <span class="flex-1 text-sm">Removed "{removedToast.label}"</span>
     <button onclick={undoRemove}
+            class="px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium">Undo</button>
+  </div>
+{/if}
+
+{#if itemUndoToast}
+  <div class="fixed bottom-16 left-4 right-4 bg-gray-800 rounded-lg p-4 flex items-center gap-3 shadow-xl border border-gray-700 z-50">
+    <span class="flex-1 text-sm">Item removed</span>
+    <button onclick={undoItemDeselect}
             class="px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium">Undo</button>
   </div>
 {/if}

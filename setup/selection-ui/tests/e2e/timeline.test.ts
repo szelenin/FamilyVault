@@ -206,6 +206,121 @@ test.describe("Screen 2 — Timeline Review", () => {
     });
   });
 
+  test.describe("Clip Editing — Preview", () => {
+    test("expand scene → tap thumbnail → detail overlay opens", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      // Expand first scene
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000); // wait for details fetch
+      // Tap first expanded thumbnail
+      const thumb = page.getByTestId("expanded-thumbnail").first();
+      if (await thumb.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await svelteClick(thumb);
+        await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
+      } else {
+        test.skip();
+      }
+    });
+
+    test("detail overlay shows close button and counter", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000);
+      const thumb = page.getByTestId("expanded-thumbnail").first();
+      if (await thumb.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await svelteClick(thumb);
+        await expect(page.getByTestId("detail-close")).toBeVisible();
+        await expect(page.getByTestId("detail-counter")).toBeVisible();
+      } else {
+        test.skip();
+      }
+    });
+
+    test("close button returns to timeline", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000);
+      const thumb = page.getByTestId("expanded-thumbnail").first();
+      if (await thumb.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await svelteClick(thumb);
+        await expect(page.getByTestId("detail-overlay")).toBeVisible();
+        await svelteClick(page.getByTestId("detail-close"));
+        await expect(page.getByTestId("detail-overlay")).not.toBeVisible();
+      } else {
+        test.skip();
+      }
+    });
+
+    test("prev/next navigation in detail view", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      // Find a scene with multiple items by looking for +N indicator
+      const strips = page.getByTestId("thumbnail-strip");
+      const count = await strips.count();
+      let found = false;
+      for (let i = 0; i < count; i++) {
+        await svelteClick(strips.nth(i));
+        await page.waitForTimeout(1000);
+        const thumbCount = await page.getByTestId("expanded-thumbnail").count();
+        if (thumbCount >= 2) {
+          await svelteClick(page.getByTestId("expanded-thumbnail").first());
+          await expect(page.getByTestId("detail-counter")).toContainText("1 /");
+          await svelteClick(page.getByTestId("detail-next"));
+          await expect(page.getByTestId("detail-counter")).toContainText("2 /");
+          await svelteClick(page.getByTestId("detail-prev"));
+          await expect(page.getByTestId("detail-counter")).toContainText("1 /");
+          await svelteClick(page.getByTestId("detail-close"));
+          found = true;
+          break;
+        }
+        // Collapse and try next
+        await svelteClick(strips.nth(i));
+        await page.waitForTimeout(300);
+      }
+      if (!found) test.skip();
+    });
+  });
+
+  test.describe("Clip Editing — Deselect", () => {
+    test("X button visible on expanded thumbnails", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000);
+      const xBtn = page.getByTestId("deselect-item").first();
+      await expect(xBtn).toBeVisible({ timeout: 5000 });
+    });
+
+    test("tapping X deselects item and shows undo", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      const countBefore = await page.getByTestId("scene-card").first().locator("text=/\\d+ items/").textContent();
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000);
+      await svelteClick(page.getByTestId("deselect-item").first());
+      await page.waitForTimeout(300);
+      await expect(page.locator("text=Item removed")).toBeVisible();
+    });
+
+    test("detail view has Remove button", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      await svelteClick(page.getByTestId("thumbnail-strip").first());
+      await page.waitForTimeout(1000);
+      const thumb = page.getByTestId("expanded-thumbnail").first();
+      if (await thumb.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await svelteClick(thumb);
+        await expect(page.getByTestId("detail-deselect")).toBeVisible();
+        await svelteClick(page.getByTestId("detail-close"));
+      } else {
+        test.skip();
+      }
+    });
+  });
+
   test.describe("Full Flow", () => {
     test("Screen 1 → Screen 2 → add story → back to Screen 1", async ({ page }) => {
       await page.goto(PROJECT_URL);

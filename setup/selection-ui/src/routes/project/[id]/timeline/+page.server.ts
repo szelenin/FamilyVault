@@ -7,6 +7,7 @@ export function load({ params }) {
     const deselectedIds = new Set(project.deselected_ids || []);
     const notes = (project as any).scene_notes || {};
     const sceneOrder = (project as any).scene_order || null;
+    const videoTrims = (project as any).video_trims || {};
     
     let scenes = (project.discovery?.scenes || [])
       .filter((scene: any) => {
@@ -50,6 +51,7 @@ export function load({ params }) {
       scenes,
       totalSelected,
       estimatedDuration,
+      videoTrims,
     };
   } catch {
     throw error(404, "Project not found");
