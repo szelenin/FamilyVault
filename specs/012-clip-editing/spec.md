@@ -5,6 +5,12 @@
 **Status**: Draft  
 **Input**: Screen 2 clip editing — preview photos/videos, trim videos, deselect individual items from expanded scene view.
 
+## Clarifications
+
+### Session 2026-04-12
+
+- Q: How should deselect work in the expanded thumbnail grid? → A: X button on each thumbnail — tap removes item with brief undo. Consistent with scene-level ✕ remove pattern on Screen 2.
+
 ## Context
 
 Screen 2 (Timeline Review at `/project/{id}/timeline`) shows scenes as cards with expandable thumbnail strips. Currently the expanded view is read-only — users can see thumbnails but cannot interact with individual items. To complete the clip editing experience before AI generates the video, users need to: preview items full-screen, trim video clips, and remove (deselect) individual photos/videos they don't want.
@@ -40,7 +46,7 @@ From the expanded scene view or the full-screen preview, the user can deselect i
 
 **Acceptance Scenarios**:
 
-1. **Given** an expanded scene showing all items, **When** the user taps a deselect control on an item, **Then** the item is removed from the scene view and added to `deselected_ids`.
+1. **Given** an expanded scene showing all items, **When** the user taps the X button on an item thumbnail, **Then** the item disappears from the scene view, is added to `deselected_ids`, and a brief undo toast appears.
 2. **Given** a deselected item, **When** the scene re-renders, **Then** the item count and estimated duration update.
 3. **Given** the full-screen preview, **When** the user taps a deselect button, **Then** the current item is deselected and the preview advances to the next item.
 4. **Given** a scene where all items are deselected, **When** the last item is removed, **Then** the scene disappears from the timeline (same as scene-level remove).
@@ -79,7 +85,7 @@ When previewing a video, the user can set start and end trim points. The AI uses
 - **FR-002**: Full-screen preview shows photos at full resolution via the existing Immich thumbnail proxy.
 - **FR-003**: Full-screen preview plays videos via the existing streaming video proxy with standard controls.
 - **FR-004**: Navigation between items in the full-screen preview (swipe or next/prev buttons).
-- **FR-005**: Deselect control visible on each item in expanded scene view (toggle or X button).
+- **FR-005**: Deselect control is a small X button on each thumbnail in expanded scene view — tap removes item with brief undo opportunity.
 - **FR-006**: Deselect control available in full-screen preview.
 - **FR-007**: Deselecting an item calls the existing select API, updates `deselected_ids`, and removes the item from the scene view.
 - **FR-008**: Video trim mode with draggable start/end markers on the video scrubber.
