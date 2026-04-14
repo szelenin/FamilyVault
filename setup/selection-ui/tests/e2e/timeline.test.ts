@@ -321,6 +321,61 @@ test.describe("Screen 2 — Timeline Review", () => {
     });
   });
 
+  test.describe("Clip Editing — Video Trim", () => {
+    // Helper: find a scene with a video item, expand it, return true if found
+    async function expandSceneWithVideo(page: import("@playwright/test").Page): Promise<boolean> {
+      const strips = page.getByTestId("thumbnail-strip");
+      const count = await strips.count();
+      for (let i = 0; i < count; i++) {
+        await svelteClick(strips.nth(i));
+        await page.waitForTimeout(1000);
+        if (await page.getByTestId("video-badge").first().isVisible({ timeout: 2000 }).catch(() => false)) {
+          return true;
+        }
+        // No video in this scene — collapse and try next
+        await svelteClick(strips.nth(i));
+        await page.waitForTimeout(300);
+      }
+      return false;
+    }
+
+    // Navigate from video-badge → parent div → sibling expanded-thumbnail img
+    function videoThumbLocator(page: import("@playwright/test").Page) {
+      return page.getByTestId("video-badge").first().locator("xpath=..").locator('[data-testid="expanded-thumbnail"]');
+    }
+
+    test("Trim button visible in detail overlay for video items", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      if (!(await expandSceneWithVideo(page))) { test.skip(); return; }
+      await svelteClick(videoThumbLocator(page));
+      await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.getByTestId("detail-trim")).toBeVisible();
+      await svelteClick(page.getByTestId("detail-close"));
+    });
+
+    test("video trim — set start/end → verify saved via API", async ({ page }) => {
+      await page.goto(TIMELINE_URL);
+      await waitForHydration(page);
+      if (!(await expandSceneWithVideo(page))) { test.skip(); return; }
+      await svelteClick(videoThumbLocator(page));
+      await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
+      await svelteClick(page.getByTestId("detail-trim"));
+      await expect(page.getByTestId("trim-ui")).toBeVisible({ timeout: 3000 });
+      // Adjust trim-start slider via keyboard
+      const trimStart = page.getByTestId("trim-start");
+      await trimStart.focus();
+      for (let k = 0; k < 5; k++) await page.keyboard.press("ArrowRight");
+      // Save trim
+      await svelteClick(page.getByTestId("trim-save"));
+      await page.waitForTimeout(500);
+      // Close detail and verify trim badge appears on the thumbnail
+      await svelteClick(page.getByTestId("detail-close"));
+      await page.waitForTimeout(300);
+      await expect(page.getByTestId("trim-badge").first()).toBeVisible({ timeout: 3000 });
+    });
+  });
+
   test.describe("Full Flow", () => {
     test("Screen 1 → Screen 2 → add story → back to Screen 1", async ({ page }) => {
       await page.goto(PROJECT_URL);

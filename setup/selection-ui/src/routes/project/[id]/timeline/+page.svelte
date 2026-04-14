@@ -25,6 +25,7 @@
   let trimEnd = $state(0);
   let trimDuration = $state(0);
   let videoEl: HTMLVideoElement | null = null;
+  let videoTrims = $state<Record<string, {start: number, end: number}>>(data.videoTrims || {});
 
   function formatDuration(seconds: number): string {
     const m = Math.floor(seconds / 60);
@@ -268,7 +269,7 @@
     const dur = parseDuration(detailItem.duration);
     trimDuration = dur;
     // Check existing trim
-    const existing = data.videoTrims?.[detailItem.asset_id];
+    const existing = videoTrims?.[detailItem.asset_id];
     trimStart = existing?.start ?? 0;
     trimEnd = existing?.end ?? dur;
   }
@@ -290,8 +291,7 @@
       body: JSON.stringify({ asset_id: detailItem.asset_id, start: trimStart, end: trimEnd }),
     });
     // Update local state
-    if (!data.videoTrims) data.videoTrims = {};
-    data.videoTrims[detailItem.asset_id] = { start: trimStart, end: trimEnd };
+    videoTrims[detailItem.asset_id] = { start: trimStart, end: trimEnd };
     trimming = false;
   }
 
@@ -362,10 +362,10 @@
                         data-testid="deselect-item">✕</button>
                 <!-- Video badge -->
                 {#if sceneItemsCache[scene.id]?.find(it => it.asset_id === assetId)?.type === "VIDEO"}
-                  <div class="absolute bottom-0 right-0 bg-black/70 px-1 py-0.5 rounded-tl text-[10px] flex items-center gap-0.5">
+                  <div class="absolute bottom-0 right-0 bg-black/70 px-1 py-0.5 rounded-tl text-[10px] flex items-center gap-0.5" data-testid="video-badge">
                     <span>▶</span>
-                    {#if data.videoTrims?.[assetId]}
-                      <span class="text-blue-400">{formatTrimTime(data.videoTrims[assetId].start)}-{formatTrimTime(data.videoTrims[assetId].end)}</span>
+                    {#if videoTrims?.[assetId]}
+                      <span class="text-blue-400" data-testid="trim-badge">{formatTrimTime(data.videoTrims[assetId].start)}-{formatTrimTime(data.videoTrims[assetId].end)}</span>
                     {:else}
                       {#if sceneItemsCache[scene.id]?.find(it => it.asset_id === assetId)?.duration}
                         <span>{sceneItemsCache[scene.id].find(it => it.asset_id === assetId)?.duration}</span>
@@ -468,7 +468,7 @@
 
     <!-- Trim controls -->
     {#if trimming}
-      <div class="p-4 bg-black/90 space-y-3" onclick={(e) => e.stopPropagation()}>
+      <div class="p-4 bg-black/90 space-y-3" onclick={(e) => e.stopPropagation()} data-testid="trim-ui">
         <div class="flex items-center justify-between text-sm">
           <span class="text-gray-400">Trim: {formatTrimTime(trimStart)} — {formatTrimTime(trimEnd)}</span>
           <span class="text-gray-500">({formatTrimTime(trimEnd - trimStart)})</span>
@@ -477,17 +477,19 @@
           <label class="flex items-center gap-2 text-xs text-gray-400">
             Start
             <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimStart}
-                   class="flex-1" oninput={() => { if (trimStart >= trimEnd) trimEnd = Math.min(trimStart + 1, trimDuration); if (videoEl) videoEl.currentTime = trimStart; }} />
+                   class="flex-1" data-testid="trim-start"
+                   oninput={() => { if (trimStart >= trimEnd) trimEnd = Math.min(trimStart + 1, trimDuration); if (videoEl) videoEl.currentTime = trimStart; }} />
           </label>
           <label class="flex items-center gap-2 text-xs text-gray-400">
             End
             <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimEnd}
-                   class="flex-1" oninput={() => { if (trimEnd <= trimStart) trimStart = Math.max(trimEnd - 1, 0); if (videoEl) videoEl.currentTime = trimEnd; }} />
+                   class="flex-1" data-testid="trim-end"
+                   oninput={() => { if (trimEnd <= trimStart) trimStart = Math.max(trimEnd - 1, 0); if (videoEl) videoEl.currentTime = trimEnd; }} />
           </label>
         </div>
         <div class="flex gap-2 justify-end">
           <button onclick={cancelTrim} class="px-3 py-1.5 text-xs text-gray-400">Cancel</button>
-          <button onclick={saveTrim} class="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium">Save Trim</button>
+          <button onclick={saveTrim} class="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium" data-testid="trim-save">Save Trim</button>
         </div>
       </div>
     {/if}

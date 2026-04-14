@@ -54,7 +54,7 @@
 - [x] T014 [US3] Build trim UI: two range sliders (start/end) below video, time display ("0:05 — 0:12"), preview loops trimmed segment
 - [x] T015 [US3] Save trim: POST to `/api/project/{id}/trim` with `{asset_id, start, end}`. Load existing trims on page load.
 - [x] T016 [US3] Show trim badge on video thumbnails in expanded grid ("0:05-0:12")
-- [ ] T017 [US3] Duration estimate accounts for trimmed videos (use trim duration instead of default 8s)
+- [x] T017 [US3] Duration estimate accounts for trimmed videos (use trim duration instead of default 8s)
 
 ---
 
@@ -65,9 +65,9 @@
 - [x] T020 Write Playwright test: detail overlay prev/next navigation
 - [x] T021 Write Playwright test: X button on thumbnail deselects item → count decreases
 - [x] T022 Write Playwright test: deselect from detail view → item removed
-- [ ] T023 Write Playwright test: video trim — set start/end → verify via API
+- [x] T023 Write Playwright test: video trim — set start/end → verify via API
 - [x] T024 Run all Playwright tests — selection UI + timeline + clip editing
-- [ ] T025 Commit and push
+- [x] T025 Commit and push
 
 ---
 

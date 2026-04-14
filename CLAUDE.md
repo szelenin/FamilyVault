@@ -146,6 +146,8 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - Reads/writes project.json on filesystem, reads thumbnails from Immich API (010-selection-ui)
 - TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy (011-timeline-review)
 - project.json — add `notes` dict and `timeline_order` array (011-timeline-review)
+- TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy + project.json (011-timeline-review)
+- project.json — add `scene_notes` dict, `scene_order` array, video trim settings (011-timeline-review)
 
 ## Recent Changes
 - 010-selection-ui: SvelteKit PWA at macmini:3000 for scene-based photo/video selection. Browse scenes, tap to select, full-screen preview, video playback, favorites, batch operations.

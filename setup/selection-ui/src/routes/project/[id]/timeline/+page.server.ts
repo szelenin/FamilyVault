@@ -41,9 +41,15 @@ export function load({ params }) {
     const totalSelected = scenes.reduce((s: number, sc: any) => s + sc.selectedCount, 0);
     const totalPhotos = scenes.reduce((s: number, sc: any) => s + sc.photoCount, 0);
     const totalVideos = scenes.reduce((s: number, sc: any) => s + sc.videoCount, 0);
-    // photos × 4s + videos × 8s avg − crossfade overlaps (0.5s per transition)
+    // Account for trimmed videos: use actual trim duration instead of default 8s
+    const allSelectedIds = new Set<string>(scenes.flatMap((sc: any) => sc.selectedIds));
+    const trimmedEntries = Object.entries(videoTrims).filter(([id]) => allSelectedIds.has(id));
+    const trimmedVideoDuration = trimmedEntries.reduce((sum, [, trim]: [string, any]) => sum + (trim.end - trim.start), 0);
+    const trimmedVideoCount = trimmedEntries.length;
+    const untrimmedVideoCount = Math.max(0, totalVideos - trimmedVideoCount);
+    // photos × 4s + untrimmed videos × 8s + trimmed video durations − crossfade overlaps (0.5s per transition)
     const crossfades = Math.max(0, totalSelected - 1) * 0.5;
-    const estimatedDuration = Math.round(totalPhotos * 4 + totalVideos * 8 - crossfades);
+    const estimatedDuration = Math.round(totalPhotos * 4 + untrimmedVideoCount * 8 + trimmedVideoDuration - crossfades);
 
     return {
       projectId: params.id,
