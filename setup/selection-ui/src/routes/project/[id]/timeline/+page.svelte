@@ -351,11 +351,11 @@
         <div class="px-3 pb-2">
           <div class="flex gap-1 flex-wrap">
             {#each scene.selectedIds as assetId, i}
-              <div class="relative w-14 h-14 shrink-0">
+              <div class="relative w-14 h-14 shrink-0 cursor-pointer"
+                   onclick={() => openDetail(scene.id, i)}
+                   data-testid="expanded-thumbnail">
                 <img src="/api/thumbnail/{assetId}"
-                     alt="" class="w-full h-full object-cover rounded cursor-pointer" loading="lazy"
-                     onclick={() => openDetail(scene.id, i)}
-                     data-testid="expanded-thumbnail" />
+                     alt="" class="w-full h-full object-cover rounded" loading="lazy" />
                 <!-- X deselect button -->
                 <button class="absolute -top-1 -right-1 w-5 h-5 bg-black/80 rounded-full flex items-center justify-center text-xs text-gray-300 hover:text-red-400"
                         onclick={(e) => { e.stopPropagation(); deselectItem(scene.id, assetId); }}
@@ -365,7 +365,7 @@
                   <div class="absolute bottom-0 right-0 bg-black/70 px-1 py-0.5 rounded-tl text-[10px] flex items-center gap-0.5" data-testid="video-badge">
                     <span>▶</span>
                     {#if videoTrims?.[assetId]}
-                      <span class="text-blue-400" data-testid="trim-badge">{formatTrimTime(data.videoTrims[assetId].start)}-{formatTrimTime(data.videoTrims[assetId].end)}</span>
+                      <span class="text-blue-400" data-testid="trim-badge">{formatTrimTime(videoTrims[assetId].start)}-{formatTrimTime(videoTrims[assetId].end)}</span>
                     {:else}
                       {#if sceneItemsCache[scene.id]?.find(it => it.asset_id === assetId)?.duration}
                         <span>{sceneItemsCache[scene.id].find(it => it.asset_id === assetId)?.duration}</span>
