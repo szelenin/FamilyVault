@@ -4,12 +4,25 @@
   const totalItems = data.scenes.reduce((s, sc) => s + sc.totalCount, 0);
   const activeScenes = data.scenes.filter(s => s.selectedCount > 0);
   const emptyScenes = data.scenes.filter(s => s.selectedCount === 0);
+  const estimatedSec = totalSelected * 4;
+
+  function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+  }
 </script>
 
 <div class="mb-4">
   <a href="/" class="text-blue-400 text-sm">&larr; Projects</a>
   <h1 class="text-xl font-bold mt-1">{data.project.title}</h1>
   <p class="text-sm text-gray-400">{totalSelected}/{totalItems} selected · {data.scenes.length} scenes</p>
+</div>
+
+<!-- Summary bar -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 p-3 flex items-center justify-between z-40">
+  <div class="text-sm text-gray-400">{totalSelected}/{totalItems} selected · ~{formatDuration(estimatedSec)}</div>
+  <a href="/project/{data.project.id}/timeline" class="text-sm text-blue-400 font-medium">Review Timeline &rarr;</a>
 </div>
 
 {#if emptyScenes.length > 0}

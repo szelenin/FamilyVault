@@ -60,3 +60,32 @@ export function listProjects(): string[] {
       .reverse();
   } catch { return []; }
 }
+
+
+export function saveSceneNote(projectId: string, sceneId: string, note: string): void {
+  const filePath = path.join(STORIES_DIR, projectId, "project.json");
+  const project = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  if (!project.scene_notes) project.scene_notes = {};
+  project.scene_notes[sceneId] = note;
+  fs.writeFileSync(filePath, JSON.stringify(project, null, 2));
+}
+
+export function getSceneNotes(projectId: string): Record<string, string> {
+  const project = loadProject(projectId);
+  return (project as any).scene_notes || {};
+}
+
+export function saveSceneOrder(projectId: string, order: string[]): void {
+  const filePath = path.join(STORIES_DIR, projectId, "project.json");
+  const project = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  project.scene_order = order;
+  fs.writeFileSync(filePath, JSON.stringify(project, null, 2));
+}
+
+export function saveVideoTrim(projectId: string, assetId: string, start: number, end: number): void {
+  const filePath = path.join(STORIES_DIR, projectId, "project.json");
+  const project = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  if (!project.video_trims) project.video_trims = {};
+  project.video_trims[assetId] = { start, end };
+  fs.writeFileSync(filePath, JSON.stringify(project, null, 2));
+}

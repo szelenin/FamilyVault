@@ -58,6 +58,7 @@ cd FamilyVault
 | 2 | Google Takeout — download archives, fix metadata, extract unique files |
 | 3 | Ongoing sync — daily cron job keeps the server up to date |
 | 4 | Immich — self-hosted photo app for browsing and search |
+| 4b | Story Engine — AI-driven video clip creation from your photo library |
 | 5 | Verification and cleanup |
 
 See [`docs/plan.md`](docs/plan.md) for the full detailed plan with commands.
@@ -74,6 +75,8 @@ See [`docs/plan.md`](docs/plan.md) for the full detailed plan with commands.
 | [gpth](https://github.com/TheLastGimbus/GooglePhotosTakeoutHelper) | Fix Google Takeout metadata |
 | [czkawka](https://github.com/qarmin/czkawka) | Fast duplicate detection |
 | [Immich](https://immich.app) | Self-hosted photo browsing app |
+| [FFmpeg](https://ffmpeg.org) | Video assembly — crossfade transitions, audio mixing, encoding |
+| [SvelteKit](https://svelte.dev) | Selection UI — scene-based photo/video curation PWA |
 
 ---
 
@@ -87,6 +90,18 @@ Ready-to-run scripts are in [`/scripts`](scripts/):
 | `scripts/download-takeout.sh` | Download Google Takeout via rclone |
 | `scripts/process-takeout.sh` | Fix metadata and find Google-only delta |
 | `scripts/sync.sh` | Daily incremental sync (for cron) |
+
+### Story Engine
+
+| Script/App | Purpose |
+|------------|---------|
+| `setup/story-engine/scripts/search_photos.py` | Multi-query Immich search with probe discovery |
+| `setup/story-engine/scripts/score_and_select.py` | Quality scoring, burst dedup, scene detection, budget allocation |
+| `setup/story-engine/scripts/assemble_video.py` | FFmpeg video assembly — photos, videos, DNG, audio sync |
+| `setup/story-engine/scripts/manage_project.py` | Project file (v2) CRUD + state machine |
+| `setup/story-engine/scripts/preview.py` | Immich album creation for previews |
+| `setup/selection-ui/` | SvelteKit PWA — scene-based photo selection on mobile |
+| `.claude/skills/story-engine/SKILL.md` | AI skill — guides the entire clip creation workflow |
 
 ---
 
