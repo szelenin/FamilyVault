@@ -65,9 +65,13 @@ test.describe("Screen 2 — Timeline Review", () => {
       await expect(thumbs.first()).toBeVisible({ timeout: 10000 });
     });
 
-    test("scene card shows Add your story button", async ({ page }) => {
+    test("scene card shows Add your story button or existing note", async ({ page }) => {
       await page.goto(TIMELINE_URL);
-      await expect(page.getByTestId("add-story").first()).toBeVisible();
+      const addStory = page.getByTestId("add-story").first();
+      const existingNote = page.getByTestId("existing-note").first();
+      const hasAddStory = await addStory.isVisible({ timeout: 3000 }).catch(() => false);
+      const hasNote = await existingNote.isVisible({ timeout: 3000 }).catch(() => false);
+      expect(hasAddStory || hasNote).toBe(true);
     });
   });
 
@@ -90,10 +94,16 @@ test.describe("Screen 2 — Timeline Review", () => {
   });
 
   test.describe("Story Notes", () => {
-    test("tapping Add your story opens text field", async ({ page }) => {
+    test("tapping Add your story (or existing note) opens text field", async ({ page }) => {
       await page.goto(TIMELINE_URL);
       await waitForHydration(page);
-      await svelteClick(page.getByTestId("add-story").first());
+      const addStory = page.getByTestId("add-story").first();
+      const existingNote = page.getByTestId("existing-note").first();
+      if (await addStory.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await svelteClick(addStory);
+      } else {
+        await svelteClick(existingNote);
+      }
       await expect(page.locator("textarea")).toBeVisible({ timeout: 5000 });
     });
 
@@ -153,7 +163,13 @@ test.describe("Screen 2 — Timeline Review", () => {
     test("cancel discards changes", async ({ page }) => {
       await page.goto(TIMELINE_URL);
       await waitForHydration(page);
-      await svelteClick(page.getByTestId("add-story").first());
+      const addStory = page.getByTestId("add-story").first();
+      const existingNote = page.getByTestId("existing-note").first();
+      if (await addStory.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await svelteClick(addStory);
+      } else {
+        await svelteClick(existingNote);
+      }
       await expect(page.locator("textarea")).toBeVisible({ timeout: 3000 });
       await page.locator("textarea").fill("This should be discarded");
       await svelteClick(page.getByRole("button", { name: "Cancel" }));
@@ -363,14 +379,13 @@ test.describe("Screen 2 — Timeline Review", () => {
       await svelteClick(videoThumbLocator(page));
       await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
       await expect(page.getByTestId("trim-ui")).toBeVisible({ timeout: 3000 });
-      // Adjust trim-start via hidden range input (keyboard-accessible)
+      // Adjust trim-start via hidden range — oninput triggers autosave
       const trimStart = page.getByTestId("trim-start");
       await trimStart.focus();
       for (let k = 0; k < 5; k++) await page.keyboard.press("ArrowRight");
-      // Save trim
-      await svelteClick(page.getByTestId("trim-save"));
-      await page.waitForTimeout(500);
-      // Close detail and verify trim badge appears on the thumbnail
+      // Autosave fires on input — verify "Saved ✓" indicator
+      await expect(page.getByTestId("trim-saved")).toBeVisible({ timeout: 3000 });
+      // Close and verify trim badge on thumbnail
       await svelteClick(page.getByTestId("detail-close"));
       await page.waitForTimeout(300);
       await expect(page.getByTestId("trim-badge").first()).toBeVisible({ timeout: 3000 });

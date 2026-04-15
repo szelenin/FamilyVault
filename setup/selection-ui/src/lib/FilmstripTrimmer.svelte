@@ -7,12 +7,14 @@
     trimStart = $bindable(0),
     trimEnd = $bindable(0),
     videoEl = $bindable<HTMLVideoElement | null>(null),
+    ondragend,
   }: {
     videoSrc: string;
     duration: number;
     trimStart: number;
     trimEnd: number;
     videoEl?: HTMLVideoElement | null;
+    ondragend?: () => void;
   } = $props();
 
   const FRAME_COUNT = 10;
@@ -120,6 +122,7 @@
     dragHandle = null;
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
+    ondragend?.();
   }
 </script>
 
@@ -183,9 +186,11 @@
     <span class="text-yellow-400">{formatTime(trimEnd)}</span>
   </div>
 
-  <!-- Hidden inputs for Playwright test compatibility -->
-  <input type="range" bind:value={trimStart} min="0" max={duration} step="0.1"
-         data-testid="trim-start" style="position:absolute;opacity:0;pointer-events:none;width:0" aria-hidden="true" />
-  <input type="range" bind:value={trimEnd} min="0" max={duration} step="0.1"
-         data-testid="trim-end" style="position:absolute;opacity:0;pointer-events:none;width:0" aria-hidden="true" />
+  <!-- Hidden inputs for keyboard/test accessibility — also trigger autosave -->
+  <input type="range" value={trimStart} min="0" max={duration} step="0.1"
+         data-testid="trim-start" style="position:absolute;opacity:0;pointer-events:none;width:0" aria-hidden="true"
+         oninput={(e) => { trimStart = Math.min(+e.currentTarget.value, trimEnd - MIN_GAP); ondragend?.(); }} />
+  <input type="range" value={trimEnd} min="0" max={duration} step="0.1"
+         data-testid="trim-end" style="position:absolute;opacity:0;pointer-events:none;width:0" aria-hidden="true"
+         oninput={(e) => { trimEnd = Math.max(+e.currentTarget.value, trimStart + MIN_GAP); ondragend?.(); }} />
 </div>

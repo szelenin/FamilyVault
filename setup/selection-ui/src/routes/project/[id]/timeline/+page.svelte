@@ -21,6 +21,7 @@
   let itemUndoTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Trim state
+  let trimSaved = $state(false);
   let trimStart = $state(0);
   let trimEnd = $state(0);
   let trimDuration = $state(0);
@@ -288,6 +289,9 @@
     });
     // Update local state
     videoTrims[detailItem.asset_id] = { start: trimStart, end: trimEnd };
+    // Flash saved indicator
+    trimSaved = true;
+    setTimeout(() => trimSaved = false, 1500);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -479,11 +483,15 @@
           bind:trimStart
           bind:trimEnd
           bind:videoEl
+          ondragend={saveTrim}
         />
+        {#if trimSaved}
+          <div class="text-center text-xs text-green-400 mt-1" data-testid="trim-saved">Saved ✓</div>
+        {/if}
       </div>
     {/if}
 
-    <!-- Navigation + save -->
+    <!-- Navigation -->
     <div class="flex items-center justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
       <button onclick={prevDetail}
               class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === 0}
@@ -491,13 +499,6 @@
               data-testid="detail-prev">
         ← Prev
       </button>
-      {#if detailItem.type === "VIDEO"}
-        <button onclick={saveTrim}
-                class="px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium"
-                data-testid="trim-save">
-          Save Trim
-        </button>
-      {/if}
       <button onclick={nextDetail}
               class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === currentSceneItems().length - 1}
               disabled={detailIndex === currentSceneItems().length - 1}
