@@ -345,13 +345,14 @@ test.describe("Screen 2 — Timeline Review", () => {
       return page.getByTestId("video-badge").first().locator("xpath=..");
     }
 
-    test("Trim button visible in detail overlay for video items", async ({ page }) => {
+    test("filmstrip trim UI visible when opening a video item", async ({ page }) => {
       await page.goto(TIMELINE_URL);
       await waitForHydration(page);
       if (!(await expandSceneWithVideo(page))) { test.skip(); return; }
       await svelteClick(videoThumbLocator(page));
       await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
-      await expect(page.getByTestId("detail-trim")).toBeVisible();
+      // Filmstrip is always shown for videos — no trim button needed
+      await expect(page.getByTestId("trim-ui")).toBeVisible({ timeout: 3000 });
       await svelteClick(page.getByTestId("detail-close"));
     });
 
@@ -361,9 +362,8 @@ test.describe("Screen 2 — Timeline Review", () => {
       if (!(await expandSceneWithVideo(page))) { test.skip(); return; }
       await svelteClick(videoThumbLocator(page));
       await expect(page.getByTestId("detail-overlay")).toBeVisible({ timeout: 5000 });
-      await svelteClick(page.getByTestId("detail-trim"));
       await expect(page.getByTestId("trim-ui")).toBeVisible({ timeout: 3000 });
-      // Adjust trim-start slider via keyboard
+      // Adjust trim-start via hidden range input (keyboard-accessible)
       const trimStart = page.getByTestId("trim-start");
       await trimStart.focus();
       for (let k = 0; k < 5; k++) await page.keyboard.press("ArrowRight");

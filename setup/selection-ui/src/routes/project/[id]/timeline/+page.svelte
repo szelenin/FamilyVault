@@ -21,7 +21,6 @@
   let itemUndoTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Trim state
-  let trimming = $state(false);
   let trimStart = $state(0);
   let trimEnd = $state(0);
   let trimDuration = $state(0);
@@ -127,27 +126,35 @@
 
   // --- Detail overlay ---
 
+  function initTrimForItem(item: {asset_id: string, type: string, duration: string | null}) {
+    if (item.type !== "VIDEO") return;
+    const dur = parseDuration(item.duration);
+    trimDuration = dur;
+    const existing = videoTrims?.[item.asset_id];
+    trimStart = existing?.start ?? 0;
+    trimEnd = existing?.end ?? dur;
+  }
+
   function openDetail(sceneId: string, index: number) {
     const items = sceneItemsCache[sceneId];
     if (!items || !items[index]) return;
     detailSceneId = sceneId;
     detailIndex = index;
     detailItem = items[index];
-    trimming = false;
+    initTrimForItem(detailItem);
   }
 
   function closeDetail() {
     detailItem = null;
     detailIndex = -1;
     detailSceneId = null;
-    trimming = false;
   }
 
   function prevDetail() {
     if (!detailSceneId || detailIndex <= 0) return;
     detailIndex--;
     detailItem = sceneItemsCache[detailSceneId][detailIndex];
-    trimming = false;
+    initTrimForItem(detailItem);
   }
 
   function nextDetail() {
@@ -156,7 +163,7 @@
     if (detailIndex >= items.length - 1) return;
     detailIndex++;
     detailItem = items[detailIndex];
-    trimming = false;
+    initTrimForItem(detailItem);
   }
 
   function currentSceneItems() {
@@ -263,18 +270,6 @@
 
   // --- Video trim ---
 
-  function startTrim() {
-    if (!detailItem || detailItem.type !== "VIDEO") return;
-    trimming = true;
-    // Parse duration string "HH:MM:SS" or seconds
-    const dur = parseDuration(detailItem.duration);
-    trimDuration = dur;
-    // Check existing trim
-    const existing = videoTrims?.[detailItem.asset_id];
-    trimStart = existing?.start ?? 0;
-    trimEnd = existing?.end ?? dur;
-  }
-
   function parseDuration(d: string | null): number {
     if (!d) return 30; // default
     // "0:00:05.123" or "00:05" or just seconds
@@ -293,18 +288,13 @@
     });
     // Update local state
     videoTrims[detailItem.asset_id] = { start: trimStart, end: trimEnd };
-    trimming = false;
-  }
-
-  function cancelTrim() {
-    trimming = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (!detailItem) return;
-    if (e.key === "Escape") { if (trimming) cancelTrim(); else closeDetail(); }
-    if (e.key === "ArrowLeft" && !trimming) prevDetail();
-    if (e.key === "ArrowRight" && !trimming) nextDetail();
+    if (e.key === "Escape") closeDetail();
+    if (e.key === "ArrowLeft") prevDetail();
+    if (e.key === "ArrowRight") nextDetail();
   }
 
   const totalSelected = $derived(scenes.reduce((s, sc) => s + sc.selectedCount, 0));
@@ -443,7 +433,12 @@
     <!-- Top bar -->
     <div class="flex items-center justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
       <button onclick={closeDetail} class="text-white text-lg" data-testid="detail-close">✕</button>
-      <span class="text-sm text-gray-400" data-testid="detail-counter">{detailIndex + 1} / {currentSceneItems().length}</span>
+      <div class="text-center" data-testid="detail-counter">
+        <div class="text-sm text-gray-400">{detailIndex + 1} / {currentSceneItems().length}</div>
+        {#if detailItem.type === "VIDEO"}
+          <div class="text-xs text-yellow-400">{formatTrimTime(trimEnd - trimStart)} of {formatTrimTime(trimDuration)}</div>
+        {/if}
+      </div>
       <button onclick={() => { if (detailSceneId && detailItem) deselectItem(detailSceneId, detailItem.asset_id); }}
               class="px-3 py-1 bg-red-600/80 rounded-full text-sm font-medium"
               data-testid="detail-deselect">
@@ -454,7 +449,6 @@
     <!-- Media -->
     <div class="flex-1 flex items-center justify-center overflow-hidden" onclick={(e) => e.stopPropagation()}>
       {#if detailItem.type === "VIDEO"}
-        {@const activeTrim = videoTrims[detailItem.asset_id]}
         <video src="/api/video/{detailItem.asset_id}"
                poster="/api/thumbnail/{detailItem.asset_id}?size=preview"
                controls playsinline preload="metadata"
@@ -462,11 +456,11 @@
                class="max-w-full max-h-full object-contain"
                data-testid="detail-video"
                onloadedmetadata={() => {
-                 if (activeTrim && videoEl) videoEl.currentTime = activeTrim.start;
+                 if (videoEl) videoEl.currentTime = trimStart;
                }}
                ontimeupdate={() => {
-                 if (activeTrim && videoEl && videoEl.currentTime >= activeTrim.end) {
-                   videoEl.currentTime = activeTrim.start;
+                 if (videoEl && videoEl.currentTime >= trimEnd) {
+                   videoEl.currentTime = trimStart;
                  }
                }} />
       {:else}
@@ -476,17 +470,9 @@
       {/if}
     </div>
 
-    <!-- Trim indicator (when trim set and not editing) -->
-    {#if detailItem.type === "VIDEO" && videoTrims[detailItem.asset_id] && !trimming}
-      {@const t = videoTrims[detailItem.asset_id]}
-      <div class="px-4 py-1 bg-black/60 text-center text-xs text-blue-400" onclick={(e) => e.stopPropagation()}>
-        ✂ Showing trimmed segment: {formatTrimTime(t.start)} — {formatTrimTime(t.end)}
-      </div>
-    {/if}
-
-    <!-- Trim controls -->
-    {#if trimming}
-      <div class="p-4 bg-black/90 space-y-3" onclick={(e) => e.stopPropagation()} data-testid="trim-ui">
+    <!-- Filmstrip trim (always shown for videos) -->
+    {#if detailItem.type === "VIDEO"}
+      <div class="px-4 pt-3 pb-1 bg-black/90" onclick={(e) => e.stopPropagation()} data-testid="trim-ui">
         <FilmstripTrimmer
           videoSrc="/api/video/{detailItem.asset_id}"
           duration={trimDuration}
@@ -494,26 +480,22 @@
           bind:trimEnd
           bind:videoEl
         />
-        <div class="flex gap-2 justify-end">
-          <button onclick={cancelTrim} class="px-3 py-1.5 text-xs text-gray-400">Cancel</button>
-          <button onclick={saveTrim} class="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium" data-testid="trim-save">Save Trim</button>
-        </div>
       </div>
     {/if}
 
-    <!-- Navigation -->
-    <div class="flex justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
+    <!-- Navigation + save -->
+    <div class="flex items-center justify-between p-4 bg-black/80" onclick={(e) => e.stopPropagation()}>
       <button onclick={prevDetail}
               class="px-6 py-2 bg-gray-800 rounded-lg" class:opacity-30={detailIndex === 0}
               disabled={detailIndex === 0}
               data-testid="detail-prev">
         ← Prev
       </button>
-      {#if detailItem.type === "VIDEO" && !trimming}
-        <button onclick={startTrim}
-                class="px-4 py-2 bg-gray-800 rounded-lg text-sm"
-                data-testid="detail-trim">
-          ✂ Trim
+      {#if detailItem.type === "VIDEO"}
+        <button onclick={saveTrim}
+                class="px-4 py-2 bg-blue-600 rounded-lg text-sm font-medium"
+                data-testid="trim-save">
+          Save Trim
         </button>
       {/if}
       <button onclick={nextDetail}
