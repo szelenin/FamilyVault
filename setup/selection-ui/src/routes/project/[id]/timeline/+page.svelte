@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FilmstripTrimmer from '$lib/FilmstripTrimmer.svelte';
   let { data } = $props();
   let scenes = $state(data.scenes);
   let removedToast = $state<{id: string, label: string} | null>(null);
@@ -453,12 +454,21 @@
     <!-- Media -->
     <div class="flex-1 flex items-center justify-center overflow-hidden" onclick={(e) => e.stopPropagation()}>
       {#if detailItem.type === "VIDEO"}
+        {@const activeTrim = videoTrims[detailItem.asset_id]}
         <video src="/api/video/{detailItem.asset_id}"
                poster="/api/thumbnail/{detailItem.asset_id}?size=preview"
                controls playsinline preload="metadata"
                bind:this={videoEl}
                class="max-w-full max-h-full object-contain"
-               data-testid="detail-video" />
+               data-testid="detail-video"
+               onloadedmetadata={() => {
+                 if (activeTrim && videoEl) videoEl.currentTime = activeTrim.start;
+               }}
+               ontimeupdate={() => {
+                 if (activeTrim && videoEl && videoEl.currentTime >= activeTrim.end) {
+                   videoEl.currentTime = activeTrim.start;
+                 }
+               }} />
       {:else}
         <img src="/api/thumbnail/{detailItem.asset_id}?size=preview"
              alt="" class="max-w-full max-h-full object-contain"
@@ -466,27 +476,24 @@
       {/if}
     </div>
 
+    <!-- Trim indicator (when trim set and not editing) -->
+    {#if detailItem.type === "VIDEO" && videoTrims[detailItem.asset_id] && !trimming}
+      {@const t = videoTrims[detailItem.asset_id]}
+      <div class="px-4 py-1 bg-black/60 text-center text-xs text-blue-400" onclick={(e) => e.stopPropagation()}>
+        ✂ Showing trimmed segment: {formatTrimTime(t.start)} — {formatTrimTime(t.end)}
+      </div>
+    {/if}
+
     <!-- Trim controls -->
     {#if trimming}
       <div class="p-4 bg-black/90 space-y-3" onclick={(e) => e.stopPropagation()} data-testid="trim-ui">
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-gray-400">Trim: {formatTrimTime(trimStart)} — {formatTrimTime(trimEnd)}</span>
-          <span class="text-gray-500">({formatTrimTime(trimEnd - trimStart)})</span>
-        </div>
-        <div class="space-y-2">
-          <label class="flex items-center gap-2 text-xs text-gray-400">
-            Start
-            <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimStart}
-                   class="flex-1" data-testid="trim-start"
-                   oninput={() => { if (trimStart >= trimEnd) trimEnd = Math.min(trimStart + 1, trimDuration); if (videoEl) videoEl.currentTime = trimStart; }} />
-          </label>
-          <label class="flex items-center gap-2 text-xs text-gray-400">
-            End
-            <input type="range" min="0" max={trimDuration} step="0.1" bind:value={trimEnd}
-                   class="flex-1" data-testid="trim-end"
-                   oninput={() => { if (trimEnd <= trimStart) trimStart = Math.max(trimEnd - 1, 0); if (videoEl) videoEl.currentTime = trimEnd; }} />
-          </label>
-        </div>
+        <FilmstripTrimmer
+          videoSrc="/api/video/{detailItem.asset_id}"
+          duration={trimDuration}
+          bind:trimStart
+          bind:trimEnd
+          bind:videoEl
+        />
         <div class="flex gap-2 justify-end">
           <button onclick={cancelTrim} class="px-3 py-1.5 text-xs text-gray-400">Cancel</button>
           <button onclick={saveTrim} class="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium" data-testid="trim-save">Save Trim</button>
