@@ -2,7 +2,14 @@
 
 ## Context
 
-~2TB of photos/videos exist on both iCloud and Google Photos with near-100% overlap. The goal is to download everything to a Mac Mini home server with 12TB RAID1 storage, preserve all metadata, and run Immich as a self-hosted photo app. Ongoing sync is required.
+~2TB of photos/videos exist on both iCloud and Google Photos. The goal is to download
+everything to a Mac Mini home server with 12TB RAID1 storage, preserve all metadata,
+and run Immich as a self-hosted photo app. Ongoing sync is required.
+
+Both accounts are merged into an **iCloud Shared Photo Library**. Wife is the primary
+photo producer (~80% of photos are hers).
+
+---
 
 ## Key Decision: iCloud as Primary Source
 
@@ -18,161 +25,285 @@
 | Export tooling | osxphotos (excellent) | Takeout + post-processing (painful) |
 | Ongoing sync | Yes (osxphotos --update) | No (API dead since March 2025) |
 
-**Strategy: Full iCloud export as primary → Google Takeout only for delta (unique files not in iCloud).**
+**Strategy: Full iCloud export as primary → wife's metadata injection → Google Takeout only for delta.**
 
 ---
 
-## Phase 0: Hardware Setup
+## Critical Issue: Shared Library Strips Metadata
 
-1. Attach external RAID to Mac Mini, format as APFS
-2. Mount at `/Volumes/HomeRAID` (or your chosen name)
-3. Create folder structure:
-   ```
-   /Volumes/HomeRAID/
-   ├── icloud-export/
-   ├── google-takeout/
-   ├── google-processed/
-   ├── google-delta/
-   └── immich/
-   ```
-4. If you have a spouse/partner with a separate iCloud account:
-   - Set up **iCloud Shared Photo Library**: Settings → Photos → Shared Library → Invite Participant
-   - Both participants choose "Move All My Photos & Videos"
-   - This merges both libraries — osxphotos will export everything in one pass
+When photos cross from wife's library into the Shared Photo Library, iCloud strips:
+
+| Field | Status |
+|-------|--------|
+| **GPS coordinates** | **Stripped** — affects ~80% of library |
+| People/face tags | Stripped — Immich re-detects anyway |
+| Memories | Stripped |
+
+**Fix**: export wife's `Photos.sqlite` (metadata DB, no originals needed) and use
+`apply-wife-metadata.py` to inject exact GPS, titles, descriptions, keywords, and
+timezone into the exported files before Immich indexes them.
+
+---
+
+## Folder Structure
+
+```
+/Volumes/HomeRAID/
+├── icloud-export/          ← primary photo library (osxphotos export)
+├── wife-photos.sqlite      ← wife's metadata DB (copy from her account)
+├── google-takeout/         ← raw Takeout archives (already downloaded, 2.4TB)
+├── google-processed/       ← after gpth metadata fix
+├── google-delta/           ← Google-unique files only (after dedup)
+└── immich/                 ← Immich data (postgres, thumbs, upload)
+```
+
+---
+
+## Phase 0: Hardware Setup ✅
+
+1. 12TB RAID1 attached and formatted as APFS, mounted at `/Volumes/HomeRAID`
+2. iCloud Shared Photo Library set up — both accounts merged
+3. Photos Library on RAID: `/Volumes/HomeRAID/Photos Library.photoslibrary`
+4. Tools installed: `osxphotos`, `exiftool`, `rclone`
+5. Immich installed and running (Docker via OrbStack)
 
 ---
 
 ## Phase 1: iCloud Full Export
 
-### Move Photos Library to RAID
-If your Mac's internal drive lacks space for the full library:
+**Status**: in progress (~1,650 / 80,246 exported before pause)
+
+### Run Export
+
 ```bash
-# Quit Photos.app first, then:
-mv ~/Pictures/Photos\ Library.photoslibrary /Volumes/HomeRAID/
-
-# Reopen Photos.app holding the Option key → select the library on HomeRAID
-# Then: Photos → Settings → General → "Use as System Photo Library"
-```
-
-### Enable Download Originals
-Photos.app → Settings → iCloud → **"Download Originals to this Mac"**
-
-Wait for full download (several days for large libraries). Monitor the status bar at the bottom of Photos.app.
-
-### Install Tools
-```bash
-brew install exiftool rclone czkawka
-pip install osxphotos
-# Install gpth (GooglePhotosTakeoutHelper):
-curl -L https://github.com/TheLastGimbus/GooglePhotosTakeoutHelper/releases/download/v3.4.3/gpth-macos \
-  -o /usr/local/bin/gpth && chmod +x /usr/local/bin/gpth
-```
-
-### Run Full Export
-```bash
-./scripts/export-icloud.sh /Volumes/HomeRAID/icloud-export
-```
-
-Or manually:
-```bash
-osxphotos export /Volumes/HomeRAID/icloud-export \
-  --directory "{folder_album}" \
-  --exiftool \
-  --sidecar xmp --sidecar json \
-  --person-keyword --album-keyword \
-  --update --ramdb \
-  --export-edited --export-live --export-raw --export-bursts \
-  --touch-file --verbose
-```
-
-### Verify
-- Spot-check ~20 random files for EXIF dates, GPS coordinates, faces
-- Verify album folder structure matches Photos.app albums
-- Check Live Photos are properly paired (HEIC + MOV)
-- Compare file count: `osxphotos info` vs files on disk
-
----
-
-## Phase 2: Google Takeout (Secondary — Delta Only)
-
-### Request Takeout
-1. Go to [takeout.google.com](https://takeout.google.com)
-2. Deselect all → select **Google Photos only**
-3. File size: **50 GB**, delivery: **Add to Google Drive**
-4. Submit and wait 2-5 days for Google to prepare the export
-
-### Download via rclone
-```bash
-# Configure rclone (first time only):
-rclone config  # follow prompts, select Google Drive, full access scope
-
-./scripts/download-takeout.sh gdrive /Volumes/HomeRAID/google-takeout
-```
-
-### Process and Find Delta
-```bash
-./scripts/process-takeout.sh \
-  /Volumes/HomeRAID/google-takeout \
-  /Volumes/HomeRAID/google-processed \
+# Runs in tmux — survives SSH disconnect
+ssh macmini
+export PATH=/opt/homebrew/bin:$PATH
+tmux new -s icloud-export
+cd ~/projects/takeout/takeout
+./scripts/export-icloud.sh \
   /Volumes/HomeRAID/icloud-export \
-  /Volumes/HomeRAID/google-delta
+  "/Volumes/HomeRAID/Photos Library.photoslibrary"
 ```
 
-Merge Google-only files into the main library, verify metadata, then delete the Takeout archives to free space.
+The `--update` flag resumes from where it left off. Previously exported files are skipped.
 
----
-
-## Phase 3: Ongoing Sync
-
-### Daily Cron Job
+**Monitor progress:**
 ```bash
-# Edit crontab:
-crontab -e
-
-# Add this line (runs daily at 2 AM):
-0 2 * * * /path/to/FamilyVault/scripts/sync.sh >> /Volumes/HomeRAID/sync.log 2>&1
+tail -f /Volumes/HomeRAID/icloud-export/export.log
 ```
 
-New photos taken on any device in the Shared Library will sync to iCloud → appear in Photos.app → get picked up by the next sync run. Typical lag: a few hours.
+**Expected duration**: 3–5 hours unattended.
+
+**Before starting**: stop Immich completely to free CPU:
+```bash
+~/.orbstack/bin/docker stop $(~/.orbstack/bin/docker ps -q)
+```
+
+### What export-icloud.sh does
+
+- `--exiftool`: reads GPS, dates, keywords from Photos.sqlite → writes into files
+- `--fix-orientation`: corrects EXIF rotation flags
+- `--sidecar xmp --sidecar json`: creates XMP and JSON sidecars per file
+- `--update --update-errors`: incremental — only exports new/changed/failed files
+- `--touch-file`: sets file mtime to capture date (correct for backup tools)
+
+**Note**: `--exiftool` only writes GPS for photos owned by your account. Wife's shared
+copies get GPS stripped by iCloud before osxphotos ever sees them. That's what Phase 2 fixes.
 
 ---
 
-## Phase 4: Immich
+## Phase 2: Wife's Metadata Extraction and Injection
+
+**Status**: pending — do this while export runs or after
+
+### Why
+
+~80% of photos are from your wife's Shared Library. iCloud strips GPS (and other fields)
+from these when they appear in your library. `apply-wife-metadata.py` reads her original
+`Photos.sqlite` (which has full GPS for all her photos) and writes it directly into the
+exported files by UUID match.
+
+### Step 1 — Get wife's Photos.sqlite (15 min)
+
+On Mac Mini, create a second macOS user for wife's Apple ID:
+1. System Settings → Users & Groups → Add User
+2. Log in as her
+3. **Before opening Photos.app**: System Settings → Apple ID → iCloud → Photos →
+   confirm **"Optimize Mac Storage"** is selected (prevents downloading 2TB of originals)
+4. Open Photos.app → wait until photo count stabilizes (5–15 min — only metadata syncs)
+5. Copy her database to the RAID:
+   ```bash
+   cp ~/Pictures/Photos\ Library.photoslibrary/database/Photos.sqlite \
+      /Volumes/HomeRAID/wife-photos.sqlite
+   ```
+6. Log out of her account
+
+### Step 2 — Run metadata injection
 
 ```bash
-# Install Docker Desktop for Mac, then:
-mkdir -p /Volumes/HomeRAID/immich && cd /Volumes/HomeRAID/immich
-curl -L https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml -o docker-compose.yml
-curl -L https://github.com/immich-app/immich/releases/latest/download/example.env -o .env
-# Edit .env to set UPLOAD_LOCATION=/Volumes/HomeRAID/icloud-export
-docker compose up -d
+# Dry run first — shows what would be updated
+python3 scripts/apply-wife-metadata.py \
+  /Volumes/HomeRAID/wife-photos.sqlite \
+  /Volumes/HomeRAID/icloud-export \
+  --dry-run
+
+# Apply
+python3 scripts/apply-wife-metadata.py \
+  /Volumes/HomeRAID/wife-photos.sqlite \
+  /Volumes/HomeRAID/icloud-export
 ```
 
-Immich provides face recognition, location maps, memories, search, and sharing. It also has built-in ML-based duplicate detection as a safety net.
+**What it injects** (by UUID match):
+
+| Field | Source | EXIF tag written |
+|-------|--------|-----------------|
+| GPS coordinates | `ZASSET.ZLATITUDE/ZLONGITUDE` | `GPSLatitude/Longitude` |
+| Title | `ZADDITIONALASSETATTRIBUTES.ZTITLE` | `Title` |
+| Description | `ZADDITIONALASSETATTRIBUTES.ZASSETDESCRIPTION` | `Description` |
+| Timezone | `ZADDITIONALASSETATTRIBUTES.ZTIMEZONENAME` | `OffsetTime` |
+| Keywords | `ZKEYWORD` join | `Keywords` |
+
+**Expected**: ~80% of files updated with GPS. Files already having GPS are skipped.
+
+### Step 3 — Verify GPS coverage
+
+```bash
+# Sample 100 exported files — check GPS coverage
+total=0; with_gps=0
+while IFS= read -r f; do
+  [ $total -ge 100 ] && break
+  total=$((total + 1))
+  exiftool -fast2 -GPSLatitude "$f" 2>/dev/null | grep -q "GPS" && with_gps=$((with_gps + 1))
+done < <(find /Volumes/HomeRAID/icloud-export -name "*.HEIC" -o -name "*.jpg")
+echo "GPS coverage: $with_gps / $total"
+# PASS: ≥95% (your photos + wife's photos both covered)
+```
 
 ---
 
-## Phase 5: Verification and Cleanup
+## Phase 3: Immich Setup
 
-1. Compare file counts on disk vs iCloud library (`osxphotos info`)
-2. Spot-check metadata: random files across different years
-3. Test Live Photos play correctly in Immich
-4. Delete Takeout archives from Google Drive (reclaim cloud quota)
-5. Consider canceling or downgrading Google One / iCloud+ subscriptions
+**Status**: pending — do after Phase 2 injection is complete
+
+### Start Immich (fresh install — DB was wiped)
+
+```bash
+cd /path/to/immich
+~/.orbstack/bin/docker compose up -d
+```
+
+Open `http://macmini:2283` → complete first-run setup (create admin user, save API key
+to `/Volumes/HomeRAID/immich/api-key.txt`).
+
+### Add external library
+
+```bash
+IMMICH_KEY=$(cat /Volumes/HomeRAID/immich/api-key.txt)
+
+curl -X POST http://localhost:2283/api/libraries \
+  -H "x-api-key: $IMMICH_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "iCloud Export",
+    "importPaths": ["/usr/src/app/icloud-export"],
+    "exclusionPatterns": ["**/*.DNG","**/*.dng","**/*.RAW","**/*.raw"]
+  }' | jq '{id, name}'
+```
+
+### Trigger scan
+
+```bash
+LIBRARY_ID="<id from above>"
+curl -X POST "http://localhost:2283/api/libraries/$LIBRARY_ID/scan" \
+  -H "x-api-key: $IMMICH_KEY"
+```
+
+Immich will index all files. ML jobs (face detection, CLIP search) run automatically.
+For 80k+ photos this takes several hours — leave it running overnight.
 
 ---
 
-## Storage Budget
+## Phase 4: Google Takeout (Secondary — Delta Only)
 
-| Item | Size |
-|------|------|
-| iCloud export (steady state) | ~2 TB |
-| Google Takeout archives (temporary) | ~2 TB |
-| Google processed (temporary) | ~2 TB |
-| Immich thumbnails/cache | ~200 GB |
-| **Peak usage** | **~6 TB** |
-| **Final steady state** | **~2.5 TB** |
-| **RAID1 usable capacity** | **~6 TB** |
+**Status**: 2.4TB of archives already downloaded to `/Volumes/HomeRAID/google-takeout/`
+
+Full instructions: `docs/playbooks/google-takeout-import.md`
+
+Summary:
+1. Extract archives → `google-processed/`
+2. Fix metadata with `gpth` (JSON sidecars → EXIF)
+3. Dedup against `icloud-export/` with `czkawka` → `google-delta/`
+4. Add `google-delta/` as second Immich external library
+5. Run Immich duplicate detection for HEIC/JPEG format pairs
+
+---
+
+## Phase 5: Ongoing Sync
+
+```bash
+# Add to crontab (runs daily at 2 AM):
+0 2 * * * /Users/szelenin/projects/takeout/takeout/scripts/sync.sh \
+  >> /Volumes/HomeRAID/sync.log 2>&1
+```
+
+New photos → iCloud → Photos.app → picked up on next sync run.
+Lag: a few hours from shooting to appearing on RAID.
+
+**Note**: wife's metadata injection does NOT need to re-run for new photos — new photos
+taken after the Shared Library was set up come through with GPS intact. The stripping
+only affected historical photos from before the Shared Library merge.
+
+---
+
+## Phase 6: Verification
+
+```bash
+# T1: GPS coverage on wife's photos
+find /Volumes/HomeRAID/icloud-export -name "* (1).HEIC" | head -50 | while read f; do
+  exiftool -fast2 -GPSLatitude "$f" | grep -q GPS && echo "OK: $f" || echo "NO GPS: $f"
+done
+
+# T2: File count matches Photos.app
+export PATH=/opt/homebrew/bin:$PATH
+osxphotos info --library "/Volumes/HomeRAID/Photos Library.photoslibrary" | grep -i "photos"
+
+# T3: No upside-down files
+exiftool -fast2 -r -Orientation -if '$Orientation eq "Rotate 180"' \
+  /Volumes/HomeRAID/icloud-export 2>/dev/null | grep "File Name"
+# PASS: 0 results
+
+# T4: Immich asset count
+IMMICH_KEY=$(cat /Volumes/HomeRAID/immich/api-key.txt)
+curl -s -H "x-api-key: $IMMICH_KEY" \
+  http://localhost:2283/api/server/statistics | jq '{photos, videos}'
+# PASS: ~80k photos
+```
+
+---
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/export-icloud.sh` | Full iCloud export with all fixes |
+| `scripts/sync.sh` | Daily incremental sync |
+| `scripts/apply-wife-metadata.py` | Inject GPS + metadata from wife's Photos.sqlite |
+| `docs/playbooks/google-takeout-import.md` | Google Takeout dedup and import |
+
+---
+
+## Current Status
+
+| Phase | Status |
+|-------|--------|
+| Phase 0: Hardware | ✅ Complete |
+| Phase 1: iCloud export | 🔄 In progress (1,650 / 80,246 — paused) |
+| Phase 2: Wife's metadata | ⏳ Pending — need her Photos.sqlite |
+| Phase 3: Immich setup | ⏳ Pending — after Phase 2 |
+| Phase 4: Google Takeout | ⏳ Pending — archives on disk, not processed |
+| Phase 5: Ongoing sync | ⏳ Pending |
+| Phase 6: Verification | ⏳ Pending |
 
 ---
 
@@ -180,8 +311,9 @@ Immich provides face recognition, location maps, memories, search, and sharing. 
 
 | Risk | Mitigation |
 |------|------------|
-| Photos.app download stalls | Monitor daily; restart if stuck; can take 1-2 weeks |
-| Google Takeout export fails | Retry; verify archive count matches expected |
-| Metadata loss in Takeout | Use exiftool to verify; accept iCloud as canonical source |
-| RAID failure during migration | Do not delete cloud copies until fully verified |
-| Mac wakes from sleep mid-transfer | Set Mac Mini to never sleep during migration |
+| Export interrupted again | `--update` resumes exactly where it stopped |
+| Wife's UUID doesn't match shared copy UUID | Verify with sample query before running injection |
+| GPS coverage still low after injection | Check dry-run output; fallback to infer-gps.py for remaining gaps |
+| Google Takeout HEIC/JPEG duplicates | Immich built-in duplicate detection cleans up after import |
+| RAID failure during migration | Do not delete cloud copies until Phase 6 verification passes |
+| Mac wakes from sleep mid-transfer | System Settings → Battery → Prevent sleep while on power |

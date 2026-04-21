@@ -81,8 +81,10 @@ Work through these phases in order. Check off each one as you complete it.
      --sidecar xmp --sidecar json \
      --person-keyword --album-keyword \
      --update --ramdb \
-     --export-edited --export-live --export-raw --export-bursts \
-     --touch-file --verbose
+     --touch-file \
+     --fix-orientation \
+     --exiftool-option '-m' \
+     --verbose
    ```
 6. Verify: spot-check metadata, albums, Live Photos, file counts
 
@@ -103,9 +105,11 @@ Set up a daily cron job or launchd plist:
 ```bash
 osxphotos export /Volumes/<raid>/icloud-export \
   --directory "{folder_album}" \
-  --exiftool --update --ramdb \
-  --export-edited --export-live --export-raw \
-  --touch-file
+  --exiftool \
+  --exiftool-option '-m' \
+  --update --ramdb \
+  --touch-file \
+  --fix-orientation
 ```
 
 ### Phase 4: Immich (optional)
@@ -145,11 +149,13 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - TypeScript, SvelteKit, Node.js (needs installing on Mac Mini) + SvelteKit, @immich/ui, @vite-pwa/sveltekit, Tailwind CSS (010-selection-ui)
 - Reads/writes project.json on filesystem, reads thumbnails from Immich API (010-selection-ui)
 - TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy (011-timeline-review)
-- project.json — add `notes` dict and `timeline_order` array (011-timeline-review)
-- TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy + project.json (011-timeline-review)
-- project.json — add `scene_notes` dict, `scene_order` array, video trim settings (011-timeline-review)
+- project.json — add `scene_notes` dict, `scene_order` array (011-timeline-review)
+- TypeScript, SvelteKit (existing app at `setup/selection-ui/`) + Existing SvelteKit app + Immich API proxy + project.json (012-clip-editing)
+- project.json — video trim settings (`trim_start`, `trim_end` per asset), deselect from timeline (012-clip-editing)
 
 ## Recent Changes
+- 012-clip-editing: Full-screen preview, video trim with filmstrip handles, deselect items in timeline expanded view.
+- 011-timeline-review: Screen 2 — scene cards with stories, reorder, remove scenes, expandable thumbnail strips.
 - 010-selection-ui: SvelteKit PWA at macmini:3000 for scene-based photo/video selection. Browse scenes, tap to select, full-screen preview, video playback, favorites, batch operations.
 - 009-assembler-refactor: v2 project.json support, DNG/RAW conversion, video clips with audio sync, portrait/landscape orientation, no-crop display.
 - 008-intelligent-search: AI-first probe search for date discovery, GPS location expansion, AI-driven budget allocation.
