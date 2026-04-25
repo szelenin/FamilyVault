@@ -2,8 +2,27 @@
 
 **Feature Branch**: `013-wife-metadata-import`
 **Created**: 2026-04-25
-**Status**: Draft
+**Status**: ⚠️ Premise rejected by research — see [research.md](./research.md). Pending decision on whether to kill, repurpose, or keep as defensive cold-start tool.
 **Input**: User description: "Wife metadata import: extend apply-wife-metadata.py to import GPS, favorites, ratings, titles, descriptions, keywords, and timezone from the second iCloud Photos library to matching files in icloud-export, for both photos and videos, verified end-to-end via Immich API"
+
+> **Research outcome (2026-04-25)**: iCloud Shared Photo Library propagates ALL
+> metadata (GPS, favorites, descriptions) between participants automatically.
+> Verified empirically: 0 photos in either direction had GPS the other didn't, on
+> a full 6,663-photo set-difference check. `osxphotos --update --exiftool` (daily
+> launchd sync) catches metadata-only changes and re-writes them into export files
+> (verified on a 100-file random sample: 100/100 export files have GPS in EXIF).
+> The original premise that motivated this spec — *Alice's metadata, especially
+> GPS, isn't shared with me* — is **factually wrong**. The IMP-011 v1 result of
+> "37 UUID matches → 24 files updated" was almost certainly a transient sync race
+> condition that iCloud resolved independently within ~2 days.
+>
+> See `research.md` for full evidence, method, and recommendation.
+
+## Clarifications
+
+### Session 2026-04-25
+
+- Q: On per-file write failure, should the system continue or abort? → A: Continue past per-file errors with logging; final summary reports updated count, error count, and a list of failed files.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -215,6 +234,10 @@ modified, zero backups are written, and a clear count breakdown is produced.
   metadata read.
 - **FR-013**: System MUST log enough context for the user to inspect any failure
   (the file affected, the field attempted, the underlying tool's error message).
+- **FR-013a**: On a per-file metadata write failure, the system MUST continue
+  processing subsequent files; it MUST NOT abort the whole run on a single failure.
+  The final summary MUST report the updated count, the error count, and a list of
+  files that failed (sufficient for the user to retry that subset later).
 - **FR-014**: System MUST be safely re-runnable; running it again with the same data
   must not corrupt files or duplicate keywords.
 - **FR-015**: System MUST NOT import face/person tags or album membership in this
