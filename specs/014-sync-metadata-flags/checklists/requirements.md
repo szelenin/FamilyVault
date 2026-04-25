@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain  ← 1 marker outstanding (FR-002 Rating-zero vs absent)
+- [x] No [NEEDS CLARIFICATION] markers remain  ← resolved 2026-04-25 (Rating=0 explicit for non-favorites)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,8 @@
 
 ## Notes
 
-One [NEEDS CLARIFICATION] marker remains in FR-002 — the question of whether
-non-favorite photos should carry an explicit "rating zero" tag or no rating
-field at all. To be resolved via `/speckit.clarify` (or directly inline) before
-`/speckit.plan`.
+All items pass. Spec is ready for `/speckit.plan`.
 
-Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`.
+Clarification resolved (2026-04-25):
+- Non-favorite rating value: explicit zero (osxphotos `--favorite-rating`
+  default, no separate code path).

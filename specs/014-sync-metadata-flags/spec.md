@@ -24,6 +24,12 @@
 > all relevant metadata reaches the export and downstream consumers
 > (the home photo app, search tools).
 
+## Clarifications
+
+### Session 2026-04-25
+
+- Q: For non-favorited photos, should the exported file carry a rating-zero tag, or should the rating field be absent? → A: Rating=0 explicit (osxphotos `--favorite-rating` default — favorites = 5, non-favorites = 0; no separate code path needed).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — One canonical sync script (Priority: P1)
@@ -177,10 +183,12 @@ checked. A failure clearly identifies which metadata field has regressed.
 
 - **FR-001**: The repository MUST contain exactly one canonical incremental
   sync script for the export workflow.
+
+
 - **FR-002**: The sync script MUST translate the source library's favorite
-  flag into a standard rating field on the exported file (favorited → highest
-  rating; not favorited → zero rating or rating absent — see
-  [NEEDS CLARIFICATION] below).
+  flag into a standard rating field on the exported file: favorited photos
+  receive the highest rating value; non-favorited photos receive an explicit
+  zero-rating value.
 - **FR-003**: The sync script MUST write named-person tags from the source
   library into the exported file's keyword metadata.
 - **FR-004**: The sync script MUST write album names from the source library
@@ -209,11 +217,6 @@ checked. A failure clearly identifies which metadata field has regressed.
 - **FR-014**: After consolidation and flag fix, **one full re-run** of the
   canonical sync MUST be performed to backfill missing favorite / person /
   album metadata into already-exported files.
-
-[NEEDS CLARIFICATION: when a photo is **not** favorited in the library,
-should the exported file carry a "rating zero" tag, or should the rating
-field be absent? Both are valid; the choice affects how downstream tools
-behave when they see a file with no rating field at all.]
 
 ### Key Entities
 
