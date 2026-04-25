@@ -129,12 +129,19 @@ ssh macmini.local "find /Volumes/HomeRAID/icloud-export -name '*.jpg' -o -name '
 ```
 **Expected**: number matching Photos.app count (within 5%).
 
-### Step 1.5 — Inject wife's metadata + infer GPS for stragglers
+### Step 1.5 — Inject wife's metadata + infer GPS for stragglers (DEFENSIVE — usually no-op)
 
-After the export completes, run two scripts to fill metadata gaps. Most photos lack GPS
-because Location Services was off for the iPhone Camera (not because iCloud stripped it),
-so coverage gains are smaller than originally feared (~24 files in production). Still
-worth running for completeness.
+> **Note**: Spec 013 research (see `specs/013-wife-metadata-import/research.md`)
+> proved that iCloud Shared Photo Library propagates ALL metadata between
+> participants automatically, and `osxphotos --update --exiftool` from the daily
+> launchd sync re-writes metadata-only changes into export files. This step is
+> kept as a **defensive cold-start tool** for fresh re-exports or transient sync
+> race conditions; in steady state it should report 0 files to update.
+
+After the export completes, optionally run two scripts to catch any sync race
+conditions. Most photos lack GPS because Location Services was off for the iPhone
+Camera (not because iCloud stripped it), so coverage gains are typically negligible
+(~24 files on the Apr 23 IMP-011 run, 0 expected in steady state).
 
 **Skip if**: `ssh macmini.local "ls /Volumes/HomeRAID/alice/Photos\\ Library.photoslibrary/database/Photos.sqlite 2>/dev/null"` returns empty (wife's library not staged) — see plan.md Phase 2 Step 1.
 

@@ -1,6 +1,7 @@
 # spec-kit / Claude Code — may contain credentials or session data
 .claude/settings.local.json
 .claude/mcp.json
+.claude/scheduled_tasks.lock
 
 # OS
 .DS_Store
