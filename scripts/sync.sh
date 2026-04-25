@@ -40,6 +40,8 @@ osxphotos export "$EXPORT_DIR" \
   --exiftool \
   --exiftool-option '-m' \
   --favorite-rating \
+  --person-keyword \
+  --album-keyword \
   --update --update-errors \
   --touch-file \
   --fix-orientation \
