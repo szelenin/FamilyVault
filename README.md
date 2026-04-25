@@ -1,107 +1,101 @@
 # FamilyVault
 
-> Your family's memories, privately owned, permanently stored.
-
-## Why
-
-Every photo you take on your iPhone lands in iCloud. Every photo you share ends up in Google Photos. Your family's most precious memories are scattered across corporate servers, subject to pricing changes, policy changes, and account closures.
-
-**You don't own your photos. You rent storage for them.**
-
-FamilyVault changes that. It downloads your entire photo and video library — from iCloud, Google Photos, or both — to a home server you control, organizes everything with full metadata preserved, and keeps it in sync automatically. No subscriptions required. No third party between you and your memories.
+> Your family's memories, privately owned — and brought to life by AI.
 
 ---
 
-## What It Does
+## The Idea
 
-- Downloads your full photo/video library from **iCloud** and/or **Google Photos**
-- Preserves **all metadata**: EXIF, GPS, dates, albums, faces, Live Photos, edited versions
-- Deduplicates across sources — no double copies
-- Sets up **ongoing sync** so new photos land on your server automatically
-- Optionally deploys **Immich** — a self-hosted Google Photos alternative for browsing and search
+You have thousands of photos. Most of them sit unseen in iCloud or Google Photos, organized by date, buried under the sheer volume of everything you've ever shot.
+
+FamilyVault is an **agentic system** where an AI assistant owns the entire workflow — from finding your photos to building the final video. You bring the intent. The AI does the rest.
+
+**Example**: You tell the AI *"make a highlight clip of our Miami trip"*. It searches Immich for photos and videos from that period, discovers scenes (airport arrival, pool day, Ocean Drive at night, Edgar's first time in the ocean), scores and ranks content within each scene, opens a mobile UI for you to review and deselect anything you don't want, then assembles a video with crossfade transitions and music — all without you writing a line of code or clicking through a photo app.
+
+The AI guides every step. You make the creative decisions; it handles everything technical.
+
+---
+
+## How It Works
+
+```
+You: "Make a clip of our Miami trip"
+        ↓
+AI searches Immich (CLIP semantic search + GPS + date range)
+        ↓
+AI discovers scenes, scores photos, filters garbage
+        ↓
+Mobile UI opens → you review scenes, deselect bad shots, trim videos
+        ↓
+AI assembles video: crossfades, music, correct orientation
+        ↓
+"Here's your Miami highlight reel: /Volumes/HomeRAID/stories/miami-2025.mp4"
+```
+
+The AI isn't a wrapper around a fixed pipeline. It probes, adapts, asks questions, and picks a different strategy for every request. A birthday clip gets different search logic than a travel recap.
+
+---
+
+## What Runs on Your Server
+
+- **Immich** — self-hosted photo app: face recognition, CLIP semantic search, GPS, smart albums
+- **Photo library** — ~2TB of originals, exported from iCloud via `osxphotos` with full metadata
+- **Story Engine** — Python scripts the AI invokes to search, score, select, and assemble
+- **Selection UI** — SvelteKit PWA (runs on your phone) for scene review and clip editing
+- **FFmpeg** — video assembly: photos, video clips, crossfade transitions, audio mixing
+
+Nothing leaves your network. No subscriptions beyond your hardware.
+
+---
+
+## Running the AI
+
+This project is built for **Claude Code** — Anthropic's CLI that gives Claude direct access to your server via SSH, file system, and terminal. The recommended setup:
+
+```bash
+# On your laptop — Claude Code connects to Mac Mini over SSH
+claude --ssh macmini
+```
+
+Claude reads `CLAUDE.md` (the operating instructions), `INSTALL.md` (the setup guide), and the skill files in `.claude/skills/` — and knows exactly what to do. You just talk to it.
+
+Other options: Claude.ai with MCP tool access, any Claude-compatible agent with code execution, or any AI that can SSH into your server and run commands.
+
+---
+
+## Setup
+
+The `INSTALL.md` file is a structured guide written for AI agents — every step is labeled `[AGENT]` (AI runs it) or `[USER]` (AI tells you what to do). Start a Claude Code session, point it at the repo, and say *"set up FamilyVault"*.
+
+**Migration** (iCloud + Google Photos → RAID): [`docs/plan.md`](docs/plan.md)  
+**Installation** (Immich, tools, sync cron): [`INSTALL.md`](INSTALL.md)  
+**Google Takeout import**: [`docs/playbooks/google-takeout-import.md`](docs/playbooks/google-takeout-import.md)
 
 ---
 
 ## Hardware
 
-Designed for:
-- **Mac Mini** (Apple Silicon) as the home server
-- **12TB RAID1** external storage (~6TB usable, 2.5TB steady-state usage)
-- 100+ Mbps home internet connection
+Tested on:
+- **Mac Mini M4** — home server, always-on
+- **12TB RAID1** external storage (~6TB usable, ~2.5TB steady-state)
+- **100+ Mbps** home internet
 
-The approach is macOS-native and leverages Photos.app + `osxphotos` for iCloud, which gives the best metadata fidelity of any available tool.
-
----
-
-## AI-Guided Setup
-
-FamilyVault is designed to be set up with the help of an AI assistant. The `CLAUDE.md` file contains a complete guidance prompt — paste it into any AI assistant (Claude, ChatGPT, Gemini, etc.) and it will walk you through the entire process interactively, adapting to your specific hardware, cloud accounts, and preferences.
-
-```
-# Clone the repo
-git clone git@github.com:szelenin/FamilyVault.git
-cd FamilyVault
-
-# Open CLAUDE.md and paste its contents into your AI assistant of choice
-# The AI will guide you through the rest
-```
+The iCloud export path uses `osxphotos` + Photos.app on macOS — the only approach that reliably preserves originals, HEIC, Live Photos, edited versions, and full EXIF in one pass.
 
 ---
 
-## Phases
-
-| Phase | What happens |
-|-------|-------------|
-| 0 | Hardware setup — attach RAID, create folder structure |
-| 0 | iCloud Shared Library — merge your family's iCloud libraries into one |
-| 1 | iCloud full export — download all originals via `osxphotos` |
-| 2 | Google Takeout — download archives, fix metadata, extract unique files |
-| 3 | Ongoing sync — daily cron job keeps the server up to date |
-| 4 | Immich — self-hosted photo app for browsing and search |
-| 4b | Story Engine — AI-driven video clip creation from your photo library |
-| 5 | Verification and cleanup |
-
-See [`docs/plan.md`](docs/plan.md) for the full detailed plan with commands.
-
----
-
-## Tools Used
+## Tools
 
 | Tool | Purpose |
 |------|---------|
-| [osxphotos](https://github.com/RhetTbull/osxphotos) | iCloud/Photos.app export with full metadata |
+| [osxphotos](https://github.com/RhetTbull/osxphotos) | iCloud full export + incremental sync |
 | [exiftool](https://exiftool.org) | Metadata embedding and verification |
+| [Immich](https://immich.app) | Self-hosted photo browsing + AI search |
+| [FFmpeg](https://ffmpeg.org) | Video assembly — transitions, audio, encoding |
+| [SvelteKit](https://svelte.dev) | Mobile UI — scene review and clip editing |
 | [rclone](https://rclone.org) | Download Google Takeout from Google Drive |
 | [gpth](https://github.com/TheLastGimbus/GooglePhotosTakeoutHelper) | Fix Google Takeout metadata |
-| [czkawka](https://github.com/qarmin/czkawka) | Fast duplicate detection |
-| [Immich](https://immich.app) | Self-hosted photo browsing app |
-| [FFmpeg](https://ffmpeg.org) | Video assembly — crossfade transitions, audio mixing, encoding |
-| [SvelteKit](https://svelte.dev) | Selection UI — scene-based photo/video curation PWA |
-
----
-
-## Scripts
-
-Ready-to-run scripts are in [`/scripts`](scripts/):
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/export-icloud.sh` | Full + incremental iCloud export |
-| `scripts/download-takeout.sh` | Download Google Takeout via rclone |
-| `scripts/process-takeout.sh` | Fix metadata and find Google-only delta |
-| `scripts/sync.sh` | Daily incremental sync (for cron) |
-
-### Story Engine
-
-| Script/App | Purpose |
-|------------|---------|
-| `setup/story-engine/scripts/search_photos.py` | Multi-query Immich search with probe discovery |
-| `setup/story-engine/scripts/score_and_select.py` | Quality scoring, burst dedup, scene detection, budget allocation |
-| `setup/story-engine/scripts/assemble_video.py` | FFmpeg video assembly — photos, videos, DNG, audio sync |
-| `setup/story-engine/scripts/manage_project.py` | Project file (v2) CRUD + state machine |
-| `setup/story-engine/scripts/preview.py` | Immich album creation for previews |
-| `setup/selection-ui/` | SvelteKit PWA — scene-based photo selection on mobile |
-| `.claude/skills/story-engine/SKILL.md` | AI skill — guides the entire clip creation workflow |
+| [czkawka](https://github.com/qarmin/czkawka) | Duplicate detection across sources |
 
 ---
 
@@ -111,8 +105,8 @@ Ready-to-run scripts are in [`/scripts`](scripts/):
 |--|--|
 | iCloud export (steady state) | ~2 TB |
 | Google Takeout archives (temporary) | ~2 TB |
-| Immich thumbnails/cache | ~200 GB |
-| Peak usage during migration | ~6 TB |
+| Immich thumbnails + cache | ~200 GB |
+| Peak during migration | ~6 TB |
 | RAID1 usable capacity | ~6 TB |
 
 ---

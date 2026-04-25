@@ -20,3 +20,5 @@ setup/story-engine/music/**/*.mp3
 # Test artifacts
 .pytest_cache/
 *.log
+test-results/
+setup/selection-ui/test-results/
