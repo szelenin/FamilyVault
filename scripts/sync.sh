@@ -39,6 +39,7 @@ osxphotos export "$EXPORT_DIR" \
   --directory "{folder_album}" \
   --exiftool \
   --exiftool-option '-m' \
+  --favorite-rating \
   --update --update-errors \
   --touch-file \
   --fix-orientation \

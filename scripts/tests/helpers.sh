@@ -33,8 +33,11 @@ resolve_uuid_to_path() {
     local uuid="$1"
     local rel
     rel=$("$SQLITE3" "$EXPORT_DB" \
-        "SELECT filepath FROM export_data WHERE uuid='$uuid' LIMIT 1;" 2>/dev/null)
-    [ -n "$rel" ] && printf '%s/%s' "$EXPORT_DIR" "$rel"
+        "SELECT filepath FROM export_data WHERE uuid='$uuid' LIMIT 1;" 2>/dev/null) || rel=""
+    if [ -n "$rel" ]; then
+        printf '%s/%s' "$EXPORT_DIR" "$rel"
+    fi
+    return 0
 }
 
 read_exif_field() {

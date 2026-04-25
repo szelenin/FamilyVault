@@ -89,15 +89,15 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 > Write these tests FIRST, ensure they FAIL before adding the flag.
 
-- [ ] T010 [US2] Add `@test "T1_favorite_rating_5"` to `<repo>/scripts/tests/sync-metadata.bats`: pick 10 fixture UUIDs via predicate `WHERE ZTRASHEDSTATE=0 AND ZLIBRARYSCOPESHARESTATE!=0 AND ZFAVORITE=1 ORDER BY ZDATECREATED DESC LIMIT 10`; for each, resolve to file, assert `XMP:Rating == 5`. Failure message includes UUID and file path.
-- [ ] T011 [US2] Add `@test "T2_non_favorite_rating_0"` to the same bats file: pick 10 non-favorite shared-library UUIDs; assert `XMP:Rating == 0`. Failure message includes UUID and file path.
-- [ ] T012 [US2] Run `./scripts/tests/run.sh`; confirm T1 FAILS (Rating tag absent on favorites today) and T2 FAILS or returns "tag absent" on non-favorites today. Capture the failure output.
+- [X] T010 [US2] Add `@test "T1_favorite_rating_5"` to `<repo>/scripts/tests/sync-metadata.bats`: pick 10 fixture UUIDs via predicate `WHERE ZTRASHEDSTATE=0 AND ZLIBRARYSCOPESHARESTATE!=0 AND ZFAVORITE=1 ORDER BY ZDATECREATED DESC LIMIT 10`; for each, resolve to file, assert `XMP:Rating == 5`. Failure message includes UUID and file path.
+- [X] T011 [US2] Add `@test "T2_non_favorite_rating_0"` to the same bats file: pick 10 non-favorite shared-library UUIDs; assert `XMP:Rating == 0`. Failure message includes UUID and file path.
+- [X] T012 [US2] Run `./scripts/tests/run.sh`; confirm T1 FAILS (Rating tag absent on favorites today) and T2 FAILS or returns "tag absent" on non-favorites today. Capture the failure output.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Modify `<repo>/scripts/sync.sh`: add `--favorite-rating` flag to the `osxphotos export` invocation (per research.md R4). Note: `--favorite-rating` is symmetric — favorited photos receive `XMP:Rating=5`; non-favorited receive `XMP:Rating=0`. This implicitly handles the "favorite removed" edge case: a photo whose `Rating` was 5, then unfavorited in the library, will be detected by osxphotos as changed metadata and re-exported with `Rating=0` on the next sync. No separate code path is needed.
-- [ ] T014 [US2] Run a partial sync targeting the 10 favorite fixture UUIDs and 10 non-favorite fixture UUIDs (via `osxphotos export ... --uuid <id1> --uuid <id2> ...`) so the test files get the new Rating tag without waiting for a full sync. Inspect the report CSV; confirm those 20 files were "exported" or "updated".
-- [ ] T015 [US2] Re-run `./scripts/tests/run.sh`; confirm T1 PASSES and T2 PASSES. Commit US2 work.
+- [X] T013 [US2] Modify `<repo>/scripts/sync.sh`: add `--favorite-rating` flag to the `osxphotos export` invocation (per research.md R4). Note: `--favorite-rating` is symmetric — favorited photos receive `XMP:Rating=5`; non-favorited receive `XMP:Rating=0`. This implicitly handles the "favorite removed" edge case: a photo whose `Rating` was 5, then unfavorited in the library, will be detected by osxphotos as changed metadata and re-exported with `Rating=0` on the next sync. No separate code path is needed.
+- [X] T014 [US2] Run a partial sync targeting the 10 favorite fixture UUIDs and 10 non-favorite fixture UUIDs (via `osxphotos export ... --uuid <id1> --uuid <id2> ...`) so the test files get the new Rating tag without waiting for a full sync. Inspect the report CSV; confirm those 20 files were "exported" or "updated".
+- [X] T015 [US2] Re-run `./scripts/tests/run.sh`; confirm T1 PASSES and T2 PASSES. Commit US2 work.
 
 **Checkpoint**: Favorites round-trip correctly into the export. The 20 fixture files carry the right Rating values; the rest of the export will catch up on the next full sync (Polish phase T028).
 
