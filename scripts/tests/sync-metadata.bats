@@ -12,5 +12,14 @@ setup_file() {
     [ -f "$PHOTOS_DB" ] || { echo "missing Photos library DB: $PHOTOS_DB" >&2; return 1; }
 }
 
-# @test blocks for T0..T9 will be added by US1, US2, US3, US4, US5 phases.
-# This skeleton ensures the runner can be exercised before any scenarios exist.
+# --- T0 (US1): only one sync script in repo --------------------------------
+@test "T0_only_one_sync_script_in_repo" {
+    REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
+    count=$(find "${REPO_ROOT}/scripts" -maxdepth 1 -type f -name '*.sh' \
+        | grep -cE 'sync\.sh$|export-icloud\.sh$')
+    [ "$count" -eq 1 ] || {
+        echo "Expected exactly 1 sync script (sync.sh OR export-icloud.sh), found $count"
+        find "${REPO_ROOT}/scripts" -maxdepth 1 -name '*.sh'
+        return 1
+    }
+}

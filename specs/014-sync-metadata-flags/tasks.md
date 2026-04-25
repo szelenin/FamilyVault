@@ -67,13 +67,13 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 > Write these tests FIRST, ensure they FAIL before implementation.
 
-- [ ] T006 [US1] Add a structural test to `<repo>/scripts/tests/sync-metadata.bats`: `@test "T0_only_one_sync_script_in_repo"` — asserts that `find <repo>/scripts -maxdepth 1 -name '*.sh' | grep -E 'sync\.sh$|export-icloud\.sh$' | wc -l` equals 1. Run `./scripts/tests/run.sh`; confirm T0 FAILS today (both scripts exist).
+- [X] T006 [US1] Add a structural test to `<repo>/scripts/tests/sync-metadata.bats`: `@test "T0_only_one_sync_script_in_repo"` — asserts that `find <repo>/scripts -maxdepth 1 -name '*.sh' | grep -E 'sync\.sh$|export-icloud\.sh$' | wc -l` equals 1. Run `./scripts/tests/run.sh`; confirm T0 FAILS today (both scripts exist).
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Delete `<repo>/scripts/export-icloud.sh` via `git rm scripts/export-icloud.sh`.
-- [ ] T008 [P] [US1] Update `<repo>/INSTALL.md` Step 1.4: replace any reference to `export-icloud.sh` with `sync.sh` (the consolidated script does both initial export and incremental sync).
-- [ ] T009 [P] [US1] Update `<repo>/docs/plan.md` Phase 1 section: scripts table — remove `export-icloud.sh` row; clarify that `sync.sh` is the canonical entry point for both first-run export and daily sync.
+- [X] T007 [US1] Delete `<repo>/scripts/export-icloud.sh` via `git rm scripts/export-icloud.sh`.
+- [X] T008 [P] [US1] Update `<repo>/INSTALL.md` Step 1.4: replace any reference to `export-icloud.sh` with `sync.sh` (the consolidated script does both initial export and incremental sync).
+- [X] T009 [P] [US1] Update `<repo>/docs/plan.md` Phase 1 section: scripts table — remove `export-icloud.sh` row; clarify that `sync.sh` is the canonical entry point for both first-run export and daily sync.
 
 **Checkpoint**: T0 passes. Only `scripts/sync.sh` exists; docs are consistent.
 
