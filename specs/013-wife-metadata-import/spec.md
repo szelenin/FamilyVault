@@ -2,7 +2,7 @@
 
 **Feature Branch**: `013-wife-metadata-import`
 **Created**: 2026-04-25
-**Status**: ⚠️ Premise rejected by research — see [research.md](./research.md). Pending decision on whether to kill, repurpose, or keep as defensive cold-start tool.
+**Status**: ❌ **Nevered** — rejected due to research findings. Kept as defensive cold-start tool only. See [research.md](./research.md) for full evidence.
 **Input**: User description: "Wife metadata import: extend apply-wife-metadata.py to import GPS, favorites, ratings, titles, descriptions, keywords, and timezone from the second iCloud Photos library to matching files in icloud-export, for both photos and videos, verified end-to-end via Immich API"
 
 > **Research outcome (2026-04-25)**: iCloud Shared Photo Library propagates ALL
