@@ -11,6 +11,64 @@ setup_file() {
     [ -f "$PHOTOS_DB" ] || { echo "missing Photos library DB: $PHOTOS_DB" >&2; return 1; }
 }
 
+# --- T7 (US5): GPS regression guard — files with library GPS keep file GPS --
+@test "T7_no_regression_gps" {
+    # Filter to photos only (ZKIND=0) — videos use QuickTime GPS tags, not EXIF.
+    local uuids
+    uuids=$(pick_fixture_uuids "ZTRASHEDSTATE=0 AND ZLIBRARYSCOPESHARESTATE!=0 AND ZKIND=0 AND ZLATITUDE IS NOT NULL AND ZLATITUDE != -180.0 ORDER BY ZDATECREATED DESC" 10)
+    [ -n "$uuids" ] || { skip "no GPS-having shared photos in library"; }
+    local fail=0 checked=0
+    while IFS= read -r uuid; do
+        [ -z "$uuid" ] && continue
+        local file
+        file=$(resolve_uuid_to_path "$uuid")
+        [ -n "$file" ] && [ -f "$file" ] || { echo "T7: $uuid: not exported (skip)"; continue; }
+        # Skip video files (Live Photo .mov pairs) — handled by Composite:GPSPosition if needed.
+        case "$file" in
+            *.mov|*.MOV|*.mp4|*.MP4) continue ;;
+        esac
+        checked=$((checked + 1))
+        local lat lon
+        lat=$(read_exif_field "$file" "Composite:GPSPosition")
+        lon=$(read_exif_field "$file" "EXIF:GPSLongitude")
+        if [ -z "$lat" ] && [ -z "$lon" ]; then
+            echo "T7 FAIL: uuid=$uuid file=$file expected GPS, got Composite:GPSPosition='$lat' EXIF:GPSLongitude='$lon'"
+            fail=$((fail + 1))
+        fi
+    done <<< "$uuids"
+    [ "$checked" -gt 0 ] || { echo "T7: 0 fixtures actually checked"; return 1; }
+    [ "$fail" -eq 0 ] || { echo "T7: $fail of $checked fixtures missing GPS"; return 1; }
+}
+
+# --- T8 (US5): idempotency check ----------------------------------------------
+# Runs ONLY if a sync-report-*.csv was produced in the last hour AND the
+# report records 0 "exported" or "updated" rows (i.e., a steady-state run).
+# Otherwise SKIP — proper full-library idempotency is verified in Polish T032.
+@test "T8_idempotent_rerun" {
+    local report
+    report=$(find "$EXPORT_DIR" -maxdepth 1 -name 'sync-report-*.csv' -cmin -60 \
+        -exec stat -f '%c %N' {} + 2>/dev/null \
+        | sort -nr | head -1 | awk '{$1=""; print substr($0,2)}')
+    [ -n "$report" ] && [ -f "$report" ] || { skip "no recent sync-report CSV (full idempotency check is in Polish T032)"; }
+    local exported updated
+    exported=$(awk -F',' 'NR>1 && $3==1' "$report" | wc -l | tr -d ' ')
+    updated=$(awk -F',' 'NR>1 && $5==1' "$report" | wc -l | tr -d ' ')
+    if [ "$exported" -gt 0 ] || [ "$updated" -gt 0 ]; then
+        skip "latest report ($report) shows $exported exported, $updated updated — not yet a steady-state run; check after Polish T032"
+    fi
+}
+
+# --- T_negative (US5): runner exits non-zero on failed assertion -------------
+# This is a self-test of run.sh; not part of the spec acceptance set, but
+# protects FR-011 against silent regression. Activated by env var to avoid
+# polluting normal runs.
+@test "T_negative_runner_returns_nonzero_on_failure" {
+    if [ "${T_NEGATIVE_PROBE:-0}" != "1" ]; then
+        skip "negative-path probe disabled; run with T_NEGATIVE_PROBE=1 for the meta-check"
+    fi
+    false  # always fails when activated
+}
+
 # --- T0 (US1): only one sync script in repo --------------------------------
 @test "T0_only_one_sync_script_in_repo" {
     REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
