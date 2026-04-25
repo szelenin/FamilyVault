@@ -42,6 +42,7 @@ osxphotos export "$EXPORT_DIR" \
   --favorite-rating \
   --person-keyword \
   --album-keyword \
+  --sidecar xmp --sidecar json \
   --update --update-errors \
   --touch-file \
   --fix-orientation \

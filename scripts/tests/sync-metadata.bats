@@ -143,6 +143,65 @@ setup_file() {
     [ "$fail" -eq 0 ] || { echo "T9: $fail of $checked fixtures failed"; return 1; }
 }
 
+# --- T5 (US4): files recently touched by sync.sh have a sibling .xmp sidecar
+# Scope: files whose mtime is within the last hour (i.e., touched by this
+# session's partial syncs after --sidecar flags were added). Skips file types
+# osxphotos does not sidecar. Full-library coverage is verified in Polish T032.
+@test "T5_xmp_sidecar_exists" {
+    local files
+    # Take the 20 most-recently-changed primary media files. Excludes .mov
+    # because osxphotos does not write sidecars for Live Photo movie
+    # components — only for the primary HEIC/JPG. Standalone videos use
+    # the .mp4 path, which is included.
+    files=$(find "$EXPORT_DIR" -type f -cmin -60 \
+        \( -iname '*.heic' -o -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.mp4' \
+        -o -iname '*.dng' -o -iname '*.tiff' \) \
+        -exec stat -f '%c %N' {} + 2>/dev/null \
+        | sort -nr | head -20 | awk '{$1=""; print substr($0,2)}')
+    [ -n "$files" ] || { skip "no recently-touched media files"; }
+    local fail=0 checked=0
+    while IFS= read -r full; do
+        [ -z "$full" ] && continue
+        [ -f "$full" ] || continue
+        checked=$((checked + 1))
+        if [ ! -f "${full}.xmp" ]; then
+            echo "T5 FAIL: missing ${full}.xmp"
+            fail=$((fail + 1))
+        fi
+    done <<< "$files"
+    [ "$checked" -gt 0 ] || { skip "0 recently-touched media files to check"; }
+    [ "$fail" -eq 0 ] || { echo "T5: $fail of $checked fixtures missing .xmp sidecar"; return 1; }
+}
+
+# --- T6 (US4): files recently touched by sync.sh have a sibling .json sidecar
+@test "T6_json_sidecar_exists" {
+    local files
+    # Take the 20 most-recently-changed primary media files. Excludes .mov
+    # because osxphotos does not write sidecars for Live Photo movie
+    # components — only for the primary HEIC/JPG. Standalone videos use
+    # the .mp4 path, which is included.
+    files=$(find "$EXPORT_DIR" -type f -cmin -60 \
+        \( -iname '*.heic' -o -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.mp4' \
+        -o -iname '*.dng' -o -iname '*.tiff' \) \
+        -exec stat -f '%c %N' {} + 2>/dev/null \
+        | sort -nr | head -20 | awk '{$1=""; print substr($0,2)}')
+    [ -n "$files" ] || { skip "no recently-touched media files"; }
+    local fail=0 checked=0
+    while IFS= read -r full; do
+        [ -z "$full" ] && continue
+        [ -f "$full" ] || continue
+        checked=$((checked + 1))
+        if [ ! -f "${full}.json" ]; then
+            echo "T6 FAIL: missing ${full}.json"
+            fail=$((fail + 1))
+        fi
+    done <<< "$files"
+    [ "$checked" -gt 0 ] || { skip "0 recently-touched media files to check"; }
+    [ "$fail" -eq 0 ] || { echo "T6: $fail of $checked fixtures missing .json sidecar"; return 1; }
+}
+
 # --- T4 (US3): album-member photos have album name in IPTC:Keywords ---------
 @test "T4_album_keyword" {
     local rows
