@@ -194,7 +194,7 @@ def detect_format(filename: str, mime_type: str = "") -> str:
 
 def sips_convert_cmd(src: str, dst: str) -> str:
     """Return sips shell command to convert HEIC/DNG to JPEG at max quality."""
-    return f"sips -s format jpeg '{src}' --out '{dst}'"
+    return f"sips -s format jpeg -s formatOptions 100 '{src}' --out '{dst}'"
 
 
 def make_temp_dir_path(scenario_id: str, base_tmp: str = "/tmp") -> str:
