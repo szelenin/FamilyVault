@@ -29,6 +29,9 @@
 ### Session 2026-04-25
 
 - Q: For non-favorited photos, should the exported file carry a rating-zero tag, or should the rating field be absent? → A: Rating=0 explicit (osxphotos `--favorite-rating` default — favorites = 5, non-favorites = 0; no separate code path needed).
+- Q: When does the test suite run — manual, pre-merge, after every daily sync, or weekly? → A: Manual-only invocation. The suite is run by the developer during implementation and validation of this feature; the daily sync does NOT trigger tests.
+- Q: Which script becomes canonical and which is deleted? → A: Keep `scripts/sync.sh`; delete `scripts/export-icloud.sh`. launchd already points to `sync.sh`; minimal downstream churn.
+- Q: Sidecar collision policy when an existing sidecar is present? → A: Refresh only when source metadata changed; otherwise leave in place (osxphotos's default `--sidecar` behavior). Preserves idempotency, avoids daily mtime churn on ~80k files.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -169,9 +172,10 @@ checked. A failure clearly identifies which metadata field has regressed.
 - **Photo whose only keywords come from the templates**: pre-existing user
   keywords on a photo must be preserved and not overwritten by template-only
   keywords.
-- **Sidecar already exists**: an existing sidecar must be either left in
-  place or refreshed with current metadata; it must not be silently
-  duplicated or appended to.
+- **Sidecar already exists**: when a sidecar already exists for a media file,
+  the sync MUST refresh it only when the source-library metadata that goes
+  into it has changed; otherwise the existing sidecar MUST be left in place
+  unchanged. Sidecars MUST NOT be silently duplicated or appended to.
 - **Re-running the sync with no library changes**: must report zero
   modifications; must not touch any exported file unnecessarily.
 - **Sync interrupted partway**: re-running must resume from where it left
@@ -211,9 +215,13 @@ checked. A failure clearly identifies which metadata field has regressed.
   with a non-zero status if any scenario fails.
 - **FR-012**: The test suite MUST be runnable without manual setup, beyond
   having an export already in place and the source library available.
-- **FR-013**: The deprecated sync script MUST be removed from the
-  repository as part of this feature, leaving a clean tree with only the
-  canonical script.
+- **FR-012a**: The test suite MUST be invoked manually by the developer; the
+  daily scheduled sync MUST NOT trigger it. Tests are run during
+  implementation and validation of changes to the sync script, not as part of
+  ongoing operations.
+- **FR-013**: The canonical script is `scripts/sync.sh`. The deprecated
+  script `scripts/export-icloud.sh` MUST be removed from the repository as
+  part of this feature, leaving a clean tree with only `scripts/sync.sh`.
 - **FR-014**: After consolidation and flag fix, **one full re-run** of the
   canonical sync MUST be performed to backfill missing favorite / person /
   album metadata into already-exported files.
