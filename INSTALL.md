@@ -100,37 +100,59 @@ ssh macmini.local "/opt/homebrew/bin/osxphotos info 2>&1 | grep 'Missing'"
 
 Tell the user: *"iCloud is downloading your originals. This can take 1-3 days for a large library. We can continue setting up other components while it downloads. I'll check progress periodically."*
 
-### Step 1.4 — Run osxphotos full export
+### Step 1.4 — Run osxphotos full export (via export-icloud.sh)
 
 **Run only when Step 1.3 exit condition is met** (Missing total = 0).
 
+The wrapper script `scripts/export-icloud.sh` runs osxphotos with the full IMP-011 flag
+set (`--update-errors`, `--fix-orientation`, `--export-edited`, `--exiftool-option '-m'`,
+report CSV). Re-running the same command is always safe — `--update` resumes incrementally.
+
 **[AGENT]**
 ```bash
-ssh macmini.local "nohup /opt/homebrew/bin/osxphotos export /Volumes/HomeRAID/icloud-export \
-  --directory '{folder_album}' \
-  --exiftool \
-  --sidecar xmp --sidecar json \
-  --person-keyword --album-keyword \
-  --update --ramdb \
-  --export-edited --export-live --export-raw --export-bursts \
-  --touch-file \
-  > /Volumes/HomeRAID/icloud-export/osxphotos.log 2>&1 &
-echo \$!"
+ssh macmini.local "cd ~/projects/takeout/takeout && tmux new -d -s icloud-export \
+  './scripts/export-icloud.sh /Volumes/HomeRAID/icloud-export \
+   \"/Volumes/HomeRAID/Photos Library.photoslibrary\"'"
 ```
 
-**[USER]**: *"osxphotos is exporting your library to the RAID. This can take several hours. I'll notify you when it's done."*
+**[USER]**: *"osxphotos is exporting your library to the RAID. This can take 3–5 hours on the first run. I'll notify you when it's done."*
 
 **[AGENT]** Poll until complete:
 ```bash
-ssh macmini.local "tail -5 /Volumes/HomeRAID/icloud-export/osxphotos.log"
+ssh macmini.local "tail -5 \$(ls -t /Volumes/HomeRAID/icloud-export/osxphotos-export-*.log | head -1)"
 ```
 **Expected when done**: log contains `Done: exporting`
 
 **Verify**:
 ```bash
-ssh macmini.local "find /Volumes/HomeRAID/icloud-export -name '*.jpg' -o -name '*.heic' -o -name '*.mp4' | wc -l"
+ssh macmini.local "find /Volumes/HomeRAID/icloud-export -name '*.jpg' -o -name '*.heic' -o -name '*.mp4' -o -name '*.HEIC' -o -name '*.JPG' -o -name '*.MP4' -o -name '*.MOV' | wc -l"
 ```
-**Expected**: number matching Photos.app count (within 5%)
+**Expected**: number matching Photos.app count (within 5%).
+
+### Step 1.5 — Inject wife's metadata + infer GPS for stragglers
+
+After the export completes, run two scripts to fill metadata gaps. Most photos lack GPS
+because Location Services was off for the iPhone Camera (not because iCloud stripped it),
+so coverage gains are smaller than originally feared (~24 files in production). Still
+worth running for completeness.
+
+**Skip if**: `ssh macmini.local "ls /Volumes/HomeRAID/alice/Photos\\ Library.photoslibrary/database/Photos.sqlite 2>/dev/null"` returns empty (wife's library not staged) — see plan.md Phase 2 Step 1.
+
+**[AGENT]** Wife's metadata (date-bridge match):
+```bash
+ssh macmini.local "cd ~/projects/takeout/takeout && python3 scripts/apply-wife-metadata.py \
+  '/Volumes/HomeRAID/alice/Photos Library.photoslibrary/database/Photos.sqlite' \
+  /Volumes/HomeRAID/icloud-export \
+  --shared-db '/Volumes/HomeRAID/Photos Library.photoslibrary/database/Photos.sqlite' \
+  --dry-run"
+```
+**Expected**: `Matched: N | Ambiguous (skipped): … | … files to update`. If N looks reasonable, re-run without `--dry-run`.
+
+**[AGENT]** GPS inference for `(N)` shared-copy duplicates:
+```bash
+ssh macmini.local "cd ~/projects/takeout/takeout && python3 scripts/infer-gps.py /Volumes/HomeRAID/icloud-export --dry-run"
+```
+**Expected**: list of files that would receive inferred GPS. If reasonable, re-run without `--dry-run`.
 
 ---
 
@@ -183,22 +205,60 @@ ssh macmini.local "ls /Volumes/HomeRAID/google-takeout/*.zip | wc -l"
 
 ## Phase 3: Ongoing Sync
 
-**Skip if**: `ssh macmini.local "crontab -l | grep osxphotos"` returns a match.
+**Skip if**: `ssh macmini.local "launchctl list | grep com.familyvault.sync"` returns a match.
 
-**Exit condition**: Cron job exists and runs osxphotos nightly.
+**Exit condition**: launchd agent loaded; daily sync runs at 2 AM.
 
-### Step 3.1 — Install nightly sync cron job
+> macOS Sequoia blocks `crontab` modifications without Full Disk Access. Use a launchd agent instead.
+
+### Step 3.1 — Stage sync.sh on the RAID
 
 **[AGENT]**
 ```bash
-ssh macmini.local '(crontab -l 2>/dev/null; echo "0 2 * * * /opt/homebrew/bin/osxphotos export /Volumes/HomeRAID/icloud-export --directory \"{folder_album}\" --exiftool --update --ramdb --export-edited --export-live --export-raw --touch-file >> /Volumes/HomeRAID/icloud-export/sync.log 2>&1") | crontab -'
+ssh macmini.local "mkdir -p /Volumes/HomeRAID/scripts && \
+  cp ~/projects/takeout/takeout/scripts/sync.sh /Volumes/HomeRAID/scripts/sync.sh && \
+  chmod +x /Volumes/HomeRAID/scripts/sync.sh"
+```
+**Verify**:
+```bash
+ssh macmini.local "ls -la /Volumes/HomeRAID/scripts/sync.sh"
+```
+**Expected**: file exists, executable.
+
+### Step 3.2 — Install launchd plist for daily sync
+
+**[AGENT]**
+```bash
+ssh macmini.local 'cat > ~/Library/LaunchAgents/com.familyvault.sync.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>           <string>com.familyvault.sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Volumes/HomeRAID/scripts/sync.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict><key>Hour</key><integer>2</integer><key>Minute</key><integer>0</integer></dict>
+    <key>StandardOutPath</key> <string>/Volumes/HomeRAID/sync.log</string>
+    <key>StandardErrorPath</key><string>/Volumes/HomeRAID/sync.log</string>
+    <key>RunAtLoad</key>       <false/>
+</dict>
+</plist>
+PLIST
+launchctl unload ~/Library/LaunchAgents/com.familyvault.sync.plist 2>/dev/null || true
+launchctl load   ~/Library/LaunchAgents/com.familyvault.sync.plist'
 ```
 
 **Verify**:
 ```bash
-ssh macmini.local "crontab -l | grep osxphotos"
+ssh macmini.local "launchctl list | grep com.familyvault.sync"
 ```
-**Expected**: cron line with osxphotos export command
+**Expected**: line like `-  0  com.familyvault.sync` (loaded; no error code).
+
+**On failure**: `tail /Volumes/HomeRAID/sync.log` for last run output.
 
 ---
 
@@ -322,7 +382,11 @@ echo saved"
 ```
 **Expected**: `exists` or `saved`
 
-### Step 4.6 — Register icloud-export as external library
+### Step 4.6 — Register icloud-export as external library (with DNG exclusion)
+
+The export contains both ProRAW DNG and the processed HEIC/JPEG sibling. Indexing both
+duplicates every ProRAW shot and surfaces the dark/raw DNG as the gallery preview. The
+exclusion patterns must be set **before** the first scan so DNG never gets indexed.
 
 **[AGENT]**
 ```bash
@@ -335,7 +399,7 @@ if [ -n \"\$EXISTING\" ]; then echo exists; exit 0; fi
 OWNER=\$(curl -sf -H \"x-api-key: \$API_KEY\" \"\$IMMICH_URL/api/users/me\" | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"id\"])')
 LIB_ID=\$(curl -sf -X POST \"\$IMMICH_URL/api/libraries\" \
   -H \"x-api-key: \$API_KEY\" -H 'Content-Type: application/json' \
-  -d \"{\\\"name\\\":\\\"iCloud Export\\\",\\\"ownerId\\\":\\\"\$OWNER\\\",\\\"importPaths\\\":[\\\"/usr/src/app/icloud-export\\\"],\\\"exclusionPatterns\\\":[]}\" \
+  -d \"{\\\"name\\\":\\\"iCloud Export\\\",\\\"ownerId\\\":\\\"\$OWNER\\\",\\\"importPaths\\\":[\\\"/usr/src/app/icloud-export\\\"],\\\"exclusionPatterns\\\":[\\\"**/*.DNG\\\",\\\"**/*.dng\\\",\\\"**/*.RAW\\\",\\\"**/*.raw\\\",\\\"**/*.CR2\\\",\\\"**/*.cr2\\\",\\\"**/*.ARW\\\",\\\"**/*.arw\\\"]}\" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"id\"])')
 curl -sf -X POST \"\$IMMICH_URL/api/libraries/\$LIB_ID/scan\" -H \"x-api-key: \$API_KEY\" > /dev/null
 echo \"registered: \$LIB_ID\""
@@ -448,8 +512,19 @@ ssh macmini.local "/opt/homebrew/bin/osxphotos info 2>&1 | grep 'Missing.*total:
 # osxphotos export populated icloud-export
 ssh macmini.local "find /Volumes/HomeRAID/icloud-export -name '*.jpg' -o -name '*.heic' | wc -l"
 
-# Nightly sync cron active
-ssh macmini.local "crontab -l | grep osxphotos"
+# Daily sync launchd agent loaded
+ssh macmini.local "launchctl list | grep com.familyvault.sync"
+
+# Orientation: no Rotate-180 files (IMP-011 T5)
+ssh macmini.local "exiftool -fast2 -r -Orientation -if '\$Orientation eq \"Rotate 180\"' /Volumes/HomeRAID/icloud-export 2>/dev/null | grep -c 'File Name'"
+# Expected: 0
+
+# DNG excluded from Immich (spot-check via search): known DNG filename returns 0 results
+# Use the Immich web UI search box or:
+ssh macmini.local "cat /Volumes/HomeRAID/immich/api-key.txt | xargs -I{} curl -sf -H 'x-api-key: {}' \
+  'http://immich-immich-server-1.orb.local/api/search/metadata?originalFileName=IMG_5909.DNG' \
+  | python3 -c 'import sys,json; print(len(json.load(sys.stdin).get(\"assets\",{}).get(\"items\",[])))'"
+# Expected: 0
 
 # Immich API healthy
 curl -sf http://macmini.local:2283/api/server/ping
