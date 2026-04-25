@@ -7,7 +7,7 @@ metadata:
   author: github-spec-kit
   source: verify:commands/verify.md
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 ## User Input
