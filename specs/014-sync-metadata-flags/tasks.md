@@ -31,8 +31,8 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 **Purpose**: Project initialization and basic structure.
 
-- [ ] T001 Verify bats-core installed: `bats --version` returns 1.10+; if not, install via `brew install bats-core` and re-verify.
-- [ ] T002 Create directory `<repo>/scripts/tests/` (empty; will hold helpers.sh, run.sh, sync-metadata.bats).
+- [X] T001 Verify bats-core installed: `bats --version` returns 1.10+; if not, install via `brew install bats-core` and re-verify.
+- [X] T002 Create directory `<repo>/scripts/tests/` (empty; will hold helpers.sh, run.sh, sync-metadata.bats).
 
 ---
 
@@ -42,16 +42,16 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 **⚠️ CRITICAL**: User stories 2, 3, 4, 5 cannot begin until this phase is complete.
 
-- [ ] T003 Create `<repo>/scripts/tests/helpers.sh` with these helper functions:
+- [X] T003 Create `<repo>/scripts/tests/helpers.sh` with these helper functions:
     - `pick_fixture_uuids "$predicate_sql" "$count"` — runs sqlite3 against Photos.sqlite, returns N UUIDs matching the SQL.
     - `resolve_uuid_to_path "$uuid"` — looks up `.osxphotos_export.db.export_data.filepath` for a UUID; returns absolute path of the exported file.
     - `read_exif_field "$file" "$tag"` — runs `exiftool -fast2 -<tag> -s -s -s "$file"`; returns the tag value or empty.
     - `assert_field_value "$file" "$tag" "$expected"` — calls read_exif_field; bats `assert_equal`. Output includes file path on failure.
-- [ ] T004 [P] Create `<repo>/scripts/tests/run.sh` (executable, +x) per the contract in `contracts/test-runner-cli.md` — bats wrapper that:
+- [X] T004 [P] Create `<repo>/scripts/tests/run.sh` (executable, +x) per the contract in `contracts/test-runner-cli.md` — bats wrapper that:
     - Reads env vars `EXPORT_DIR`, `LIBRARY_PATH`, `BATS_BIN` (with the documented defaults).
     - Runs `bats sync-metadata.bats`.
     - Exit 0 on all-pass, 1 on any-fail, 2 on precondition fail.
-- [ ] T005 [P] Create `<repo>/scripts/tests/sync-metadata.bats` skeleton: bats `setup_file()` loads helpers.sh, exports `EXPORT_DIR` and `LIBRARY_PATH`, asserts both exist; no `@test` blocks yet.
+- [X] T005 [P] Create `<repo>/scripts/tests/sync-metadata.bats` skeleton: bats `setup_file()` loads helpers.sh, exports `EXPORT_DIR` and `LIBRARY_PATH`, asserts both exist; no `@test` blocks yet.
 
 **Checkpoint**: Foundation ready. `./scripts/tests/run.sh` runs cleanly with 0 tests; user-story phases can now begin in parallel where dependencies allow.
 
