@@ -95,7 +95,7 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Modify `<repo>/scripts/sync.sh`: add `--favorite-rating` flag to the `osxphotos export` invocation (per research.md R4).
+- [ ] T013 [US2] Modify `<repo>/scripts/sync.sh`: add `--favorite-rating` flag to the `osxphotos export` invocation (per research.md R4). Note: `--favorite-rating` is symmetric — favorited photos receive `XMP:Rating=5`; non-favorited receive `XMP:Rating=0`. This implicitly handles the "favorite removed" edge case: a photo whose `Rating` was 5, then unfavorited in the library, will be detected by osxphotos as changed metadata and re-exported with `Rating=0` on the next sync. No separate code path is needed.
 - [ ] T014 [US2] Run a partial sync targeting the 10 favorite fixture UUIDs and 10 non-favorite fixture UUIDs (via `osxphotos export ... --uuid <id1> --uuid <id2> ...`) so the test files get the new Rating tag without waiting for a full sync. Inspect the report CSV; confirm those 20 files were "exported" or "updated".
 - [ ] T015 [US2] Re-run `./scripts/tests/run.sh`; confirm T1 PASSES and T2 PASSES. Commit US2 work.
 
@@ -122,8 +122,14 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 - [ ] T019 [US3] Modify `<repo>/scripts/sync.sh`: add `--person-keyword` and `--album-keyword` flags to the `osxphotos export` invocation.
 - [ ] T020 [US3] Run a partial sync targeting the 20 fixture UUIDs from T016 and T017 (`osxphotos export ... --uuid ... --uuid ...`); confirm those files were updated.
 - [ ] T021 [US3] Re-run `./scripts/tests/run.sh`; confirm T3 and T4 PASS. Commit US3 work.
+- [ ] T021a [US3] Add `@test "T9_user_keywords_preserved"` to `<repo>/scripts/tests/sync-metadata.bats`: pick 5 fixture UUIDs that have at least one user-set keyword in Photos.app (query `ZASSET` joined to `Z_<n>KEYWORDS` and `ZKEYWORD`); for each fixture:
+    - Read `IPTC:Keywords` from the exported file BEFORE re-running sync; capture as `before_keywords`.
+    - Run `osxphotos export ... --uuid <id>` (with the new flags).
+    - Read `IPTC:Keywords` from the exported file AFTER; capture as `after_keywords`.
+    - Assert `before_keywords` is a subset of `after_keywords` (every original keyword preserved). New template keywords (person, album) MAY appear additionally — that's expected, not a failure.
+    Failure message includes UUID, file path, before set, after set, and the missing keyword(s). This verifies the spec Edge Case "Pre-existing user keywords on a photo must be preserved and not overwritten by template-only keywords."
 
-**Checkpoint**: Person/album keywords round-trip correctly for the fixture set.
+**Checkpoint**: Person/album keywords round-trip correctly for the fixture set; user-set keywords are preserved.
 
 ---
 
@@ -161,9 +167,10 @@ description: "Tasks for spec 014 — Sync Script Metadata Flags + Consolidation"
 
 - [ ] T028 [US5] Add `@test "T7_no_regression_gps"` to `<repo>/scripts/tests/sync-metadata.bats`: pick 10 fixture UUIDs that have GPS in the library; assert the exported file's `GPSLatitude` and `GPSLongitude` are present. This is a regression guard against future changes that drop GPS writes.
 - [ ] T029 [US5] Add `@test "T8_idempotent_rerun"` to the same bats file: invoke `<repo>/scripts/sync.sh` (use a small library subset via env var if needed for speed); read the latest CSV report; assert that the count of rows whose status is `exported` OR `updated` is 0. This proves SC-006 idempotency.
-- [ ] T030 [US5] Run `./scripts/tests/run.sh`; confirm all 8 tests (T0..T8) PASS together. The whole suite must exit 0 in under 2 minutes (SC-008).
+- [ ] T030 [US5] Run `time ./scripts/tests/run.sh`; confirm all 9 tests (T0..T8 plus T9 user-keyword preservation) PASS together AND total wall-clock is under 120 seconds (SC-008). If wall-clock exceeds 120s, investigate cause (slow exiftool / RAID I/O / fixture growth) before merging. Optionally enforce in `run.sh` itself: capture `SECONDS` at start/end and exit with code `3` if exceeded — distinguishing slow runs from content failures.
+- [ ] T030a [US5] Negative-path verification of FR-011 (test runner returns non-zero on failure): temporarily prepend `@test "deliberate_fail" { false }` to `<repo>/scripts/tests/sync-metadata.bats`. Run `./scripts/tests/run.sh`; assert `$? != 0`. Remove the deliberate failure block. Protects against a silent regression where the runner reports OK even when an assertion fails.
 
-**Checkpoint**: Test suite is complete and green; regressions in any field will FAIL a specific scenario with a clear message naming the offending field and file.
+**Checkpoint**: Test suite is complete and green; regressions in any field will FAIL a specific scenario with a clear message naming the offending field and file. The runner itself is verified to fail loudly.
 
 ---
 
@@ -197,13 +204,13 @@ Within US2 (Phase 4):
   T010, T011 (tests, same file: sequential) ──► T012 (run, fail) ──► T013 (impl) ──► T014 (sync) ──► T015 (run, pass)
 
 Within US3 (Phase 5):
-  T016, T017 (sequential, same file) ──► T018 (run, fail) ──► T019 (impl) ──► T020 (sync) ──► T021 (run, pass)
+  T016, T017 (sequential, same file) ──► T018 (run, fail) ──► T019 (impl) ──► T020 (sync) ──► T021 (run, pass) ──► T021a (user-keyword preservation test)
 
 Within US4 (Phase 6):
   T022, T023 (sequential, same file) ──► T024 (run, fail) ──► T025 (impl) ──► T026 (sync) ──► T027 (run, pass)
 
 Within US5 (Phase 7):
-  T028, T029 (sequential, same file) ──► T030 (run, all pass)
+  T028, T029 (sequential, same file) ──► T030 (run, all pass) ──► T030a (negative-path runner check)
 
 Phase 8 (Polish):
   T031 (full sync) ──► T032 (verify SC-007)
