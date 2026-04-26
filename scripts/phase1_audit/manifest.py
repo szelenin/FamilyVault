@@ -14,7 +14,7 @@ class Manifest:
     total_folders: int
     extension_counts: Mapping[str, int]
     year_folder_count: int
-    year_folder_range: tuple[str, str]
+    year_folder_range: tuple[str | None, str | None]
     user_album_count: int
     user_albums: tuple[str, ...]
 
