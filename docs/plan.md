@@ -133,7 +133,7 @@ ssh macmini
 export PATH=/opt/homebrew/bin:$PATH
 tmux new -s icloud-export
 cd ~/projects/takeout/takeout
-./scripts/export-icloud.sh \
+./scripts/sync.sh \
   /Volumes/HomeRAID/icloud-export \
   "/Volumes/HomeRAID/Photos Library.photoslibrary"
 ```
@@ -153,7 +153,7 @@ tail -f /Volumes/HomeRAID/icloud-export/osxphotos-export-*.log
 cd setup/immich && docker compose down
 ```
 
-### What export-icloud.sh does (IMP-011 final form)
+### What sync.sh does (canonical, post spec-014)
 
 - `--library` explicit path → no ambiguous library detection
 - `--update --update-errors` → incremental + retry previously failed files
@@ -323,7 +323,12 @@ Summary:
 
 ## Phase 5: Ongoing Sync
 
-**Status**: ✅ Complete — daily at 2 AM via launchd
+**Status**: ✅ Complete — daily at 2 AM via launchd. Updated under spec 014:
+`sync.sh` now writes person/album keywords (`--person-keyword
+--album-keyword`) and skips the `--favorite-rating` / `--sidecar` flags
+that would have forced full-library rewrites. Favorites are written by
+a one-shot `scripts/apply-favorites.py` direct exiftool batch when needed
+(see `specs/014-sync-metadata-flags/`).
 
 macOS Sequoia blocks `crontab` modifications without Full Disk Access. Use a launchd
 agent instead. The plist + script are already on the RAID:
@@ -388,8 +393,7 @@ curl -s -H "x-api-key: $IMMICH_KEY" \
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/export-icloud.sh` | Full iCloud export with IMP-011 fixes (orientation, --update-errors, --export-edited) |
-| `scripts/sync.sh` | Daily incremental sync (invoked by launchd) |
+| `scripts/sync.sh` | Canonical sync — both first-run export and daily incremental (invoked by launchd) |
 | `scripts/apply-wife-metadata.py` | Inject GPS + metadata from wife's Photos.sqlite via date-bridge |
 | `scripts/infer-gps.py` | Backfill GPS on shared copies via temporal-neighbor inference |
 | `scripts/create-test-fixtures.sh` | IMP-011 small test export for cherry-picked verification cases |

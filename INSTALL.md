@@ -100,18 +100,27 @@ ssh macmini.local "/opt/homebrew/bin/osxphotos info 2>&1 | grep 'Missing'"
 
 Tell the user: *"iCloud is downloading your originals. This can take 1-3 days for a large library. We can continue setting up other components while it downloads. I'll check progress periodically."*
 
-### Step 1.4 — Run osxphotos full export (via export-icloud.sh)
+### Step 1.4 — Run osxphotos full export (via sync.sh)
 
 **Run only when Step 1.3 exit condition is met** (Missing total = 0).
 
-The wrapper script `scripts/export-icloud.sh` runs osxphotos with the full IMP-011 flag
-set (`--update-errors`, `--fix-orientation`, `--export-edited`, `--exiftool-option '-m'`,
-report CSV). Re-running the same command is always safe — `--update` resumes incrementally.
+The canonical script `scripts/sync.sh` runs osxphotos with the spec-014 flag set
+(`--update --update-errors`, `--fix-orientation`, `--exiftool-option '-m'`,
+`--person-keyword`, `--album-keyword`). Re-running the same command is always
+safe — `--update` resumes incrementally and is idempotent when nothing has
+changed.
+
+For favorites, run `scripts/apply-favorites.py` separately when needed — it
+writes `XMP:Rating=5` directly to favorited photos via exiftool batch, much
+faster than letting osxphotos's binary `--favorite-rating` flag force a
+full-library re-export. The two flags `--favorite-rating` and `--sidecar` are
+intentionally NOT in `sync.sh` for this reason; see
+`specs/014-sync-metadata-flags/` for full rationale.
 
 **[AGENT]**
 ```bash
 ssh macmini.local "cd ~/projects/takeout/takeout && tmux new -d -s icloud-export \
-  './scripts/export-icloud.sh /Volumes/HomeRAID/icloud-export \
+  './scripts/sync.sh /Volumes/HomeRAID/icloud-export \
    \"/Volumes/HomeRAID/Photos Library.photoslibrary\"'"
 ```
 

@@ -39,6 +39,8 @@ osxphotos export "$EXPORT_DIR" \
   --directory "{folder_album}" \
   --exiftool \
   --exiftool-option '-m' \
+  --person-keyword \
+  --album-keyword \
   --update --update-errors \
   --touch-file \
   --fix-orientation \
