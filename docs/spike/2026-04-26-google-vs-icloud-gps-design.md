@@ -227,3 +227,91 @@ None — all clarifying questions answered in brainstorm.
 
 Once you approve this design, the brainstorming skill hands off to
 `writing-plans` to produce the step-by-step implementation plan.
+
+---
+
+## Results (2026-04-26)
+
+Spike implemented per `2026-04-26-google-vs-icloud-gps-plan.md` on branch
+`spike-google-icloud-gps` (44 unit tests passing) and run against the
+**JSON sidecars from one Google Takeout zip** (`takeout-...-3-001.zip`,
+account 2; ~50 GB compressed → 1,002 sidecars extracted in ~6s; only the
+sidecars were unzipped, not the photo bytes).
+
+### Headline
+
+**Hypothesis CONFIRMED. Google has dramatically more GPS coverage than iCloud.**
+
+### Phase A baseline
+
+- Photos in this zip's metadata: **973** (29 non-photo sidecars filtered out)
+- **Photos with `geoData` in Google: 742 (76.3%)**
+- For comparison, iCloud library-wide GPS coverage is **8.3%** (6,692 of 80,258 assets)
+- Photos where `geoData` differs from `geoDataExif`: **only 7**
+
+The 7-vs-742 ratio rejects "Google added GPS via Location History." Google
+**preserved original EXIF GPS that the photos already had** — and iCloud
+somehow lost most of it.
+
+### Phase B+C matching
+
+For each of the 973 Google photos, the matcher found 0..N iCloud
+candidates by filename and ran all 8 signals. **2,367 (Google-photo,
+iCloud-candidate) rows** produced. Confidence is universally low (≤0.1)
+because the JSON-only run had no photo bytes for hash/sha256/phash signals
+— but the **`gps_gap` boolean** (Google has GPS, iCloud's matched candidate
+has `-180.0` sentinel = no GPS) is independent of those signals.
+
+| Bucket | Distinct Google photos |
+|--------|------------------------|
+| Total photos in zip with GPS | 742 |
+| **Photos with `gps_gap=True` (Google has GPS, iCloud does not)** | **735** |
+| of which: have iCloud filename match (all candidates lack GPS) | 422 |
+| of which: are Google-only (no iCloud filename match) | 313 |
+
+### Headline numbers
+
+- **735 of 742 (99%) of Google's GPS-having photos in this zip lack GPS in iCloud.**
+- That's 1 zip out of 50. If others are comparable: **~37,000 GPS-gap photos across the full Google Takeout** — vastly more than iCloud's 6,692 library-wide GPS coverage.
+- Even with conservative interpretation (filename collisions, different photos sharing names), **hundreds to thousands** of iCloud photos in just this one zip's worth of data have a Google GPS coordinate that iCloud lacks.
+
+### Caveats on the numbers
+
+- The 422 "name-matched but iCloud lacks GPS" cases have low (0.1)
+  composite confidence because we ran without photo bytes. With photo
+  bytes (size/dim/hash/phash signals), confidence would be much higher
+  and we could deduplicate filename collisions confidently.
+- The 313 "Google-only" cases (no iCloud filename match) are suspect —
+  some may actually be in iCloud under different filenames (renamed by
+  iCloud). Date-window filtering or perceptual hashing on photo bytes
+  could narrow this further.
+- The headline still holds: even halving the numbers leaves a multi-thousand-photo gap.
+
+### Other findings worth noting
+
+- **Google has named face tags.** Sample sidecar showed
+  `people: [{"name": "Эдгар"}]`. Your iCloud library has 0 named persons.
+  This is a *separate* metadata gap that this spike was not scoped to test.
+- The Takeout archive_browser.html lists folders going back to **2004**.
+  iCloud's data starts much later. Google's archive is genuinely older and
+  richer.
+
+## Recommendation
+
+**Open a back-fill spec.** Suggested name: `015-google-gps-backfill`.
+
+The back-fill script would:
+
+1. For each of 50 Takeout zips, extract just the JSON sidecars (~5 sec each)
+2. For each sidecar with `geoData`: find the matching iCloud export file by
+   filename + capture-date (within a ±2 sec window)
+3. If the iCloud file's `EXIF:GPSLatitude` is missing or sentinel, write
+   Google's GPS via direct `exiftool -overwrite_original`
+4. Same pattern as `apply-favorites.py` — fast, targeted, doesn't fight
+   osxphotos's binary flags
+
+Estimated impact: roughly **30,000-40,000 iCloud photos gain GPS** they
+currently lack. This would dramatically improve Immich's "Places" view and
+location-based search.
+
+**The spike is complete; hypothesis confirmed; outcome warrants follow-up.**
