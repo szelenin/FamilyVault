@@ -19,7 +19,7 @@ Import the user's complete Google Takeout (50 zip files, 2.4 TB, ~243k media ite
 
 ### Tool: immich-go in zip-direct mode
 
-Single-pass import, all 50 zips passed to `immich-go upload from-google-photos` in one invocation. Per-zip checkpointing is NOT viable — Google scatters sidecars and Live Photo pairs across zip boundaries, and per-zip processing creates orphan sidecars and unpaired motion-photo halves.
+Single-pass import, all 49 photo-data zips (matching `takeout-*-3-*.zip`) passed to `immich-go upload from-google-photos` in one invocation. (The 50th `.zip` in the takeout folder is the small metadata-HTML zip — `archive_browser.html` — which is not photo data; we already extracted the manifest from it.) Per-zip checkpointing is NOT viable — Google scatters sidecars and Live Photo pairs across zip boundaries, and per-zip processing creates orphan sidecars and unpaired motion-photo halves.
 
 immich-go reads zips natively; no extraction step. Server-side hash dedup handles restart-after-crash. `--pause-immich-jobs=true` defers Immich's metadata/thumbnail/ML jobs until upload completes so the upload pipe gets full CPU.
 
@@ -102,7 +102,7 @@ OrbStack's Immich containers are currently stopped (CPU pressure during prior ru
 |---|---|---|
 | 1.1 | Install immich-go on Mac Mini (`brew install immich-go` or download release) | `immich-go --version` works |
 | 1.2 | Pre-flight: confirm RAID free space ≥ 3 TB; confirm Immich healthy; confirm `archive_browser.html` matches the zips on disk (count files in zips, compare to manifest JSON) | All checks pass |
-| 1.3 | Run import in a `tmux`/`screen` session to survive SSH drops. Single command, all 50 zips: `immich-go upload from-google-photos --server=http://macmini:2283 --api-key=$(cat ~/immich-data/api-key.txt) --concurrent-tasks=4 --client-timeout=60m --pause-immich-jobs=true --on-errors=continue --session-tag=phase-1-google --log-file=/Users/szelenin/immich-data/immich-go.log /Volumes/HomeRAID/google-takeout/takeout-20260403T195541Z-3-*.zip` | Command exits with status 0 |
+| 1.3 | Run import in a `tmux`/`screen` session to survive SSH drops. Single command, all 49 photo-data zips: `immich-go upload from-google-photos --server=http://macmini:2283 --api-key=$(cat ~/immich-data/api-key.txt) --concurrent-tasks=4 --client-timeout=60m --pause-immich-jobs=true --on-errors=continue --session-tag=phase-1-google --log-file=/Users/szelenin/immich-data/immich-go.log /Volumes/HomeRAID/google-takeout/takeout-20260403T195541Z-3-*.zip` (the `-3-*.zip` glob excludes the metadata-only zip). | Command exits with status 0 |
 | 1.4 | While 1.3 runs, monitor in a second terminal: poll `/api/server/statistics` and `/api/jobs` every 60s, log to `/Users/szelenin/immich-data/import-progress.log`. | Asset count grows steadily; no sustained job-queue stalls |
 
 **Expected wall time:** 24–48 hours, mostly unattended. Start before a weekend.

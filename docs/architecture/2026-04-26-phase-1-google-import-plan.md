@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Import the user's complete Google Takeout (50 zips, 2.4 TB, ~243k items) into a freshly-reset Immich instance with new storage layout (RAID = originals only; Mac Mini internal = everything else), then audit the result against the Takeout manifest.
+**Goal:** Import the user's complete Google Takeout (49 photo-data zips + 1 metadata-HTML zip = 50 total, 2.4 TB, ~243k items) into a freshly-reset Immich instance with new storage layout (RAID = originals only; Mac Mini internal = everything else), then audit the result against the Takeout manifest.
 
-**Architecture:** Phase 0 resets Immich and migrates storage. Phase 1 runs `immich-go upload from-google-photos` once, against all 50 zips, with a parallel monitor. Phase 1.5 runs a Python audit package that compares Immich's actual state against `google-takeout-manifest.json` (the validation oracle).
+**Architecture:** Phase 0 resets Immich and migrates storage. Phase 1 runs `immich-go upload from-google-photos` once, against all 49 photo-data zips (the metadata-HTML zip is excluded by the `-3-*.zip` glob), with a parallel monitor. Phase 1.5 runs a Python audit package that compares Immich's actual state against `google-takeout-manifest.json` (the validation oracle).
 
 **Tech Stack:** Bash 3.2+ (operational scripts), Python 3.13 + pytest (audit package), Docker Compose (Immich), `immich-go` CLI (Takeout uploader), `requests` (Python HTTP), `jq` (JSON munging in Bash).
 
@@ -470,12 +470,12 @@ else
   log "immich-go:" "NOT INSTALLED FAIL"; fail=1
 fi
 
-# 5. Exactly 50 takeout zips on disk (the -3-NNN pattern)
+# 5. Exactly 49 photo-data takeout zips on disk (the -3-NNN pattern excludes the metadata zip)
 zip_count=$(find "$TAKEOUT_DIR" -name 'takeout-*-3-*.zip' -type f | wc -l | tr -d ' ')
-if [[ "$zip_count" == "50" ]]; then
-  log "Takeout zips on disk:" "50 OK"
+if [[ "$zip_count" == "49" ]]; then
+  log "Takeout zips on disk:" "49 OK"
 else
-  log "Takeout zips on disk:" "$zip_count FAIL (expected 50)"; fail=1
+  log "Takeout zips on disk:" "$zip_count FAIL (expected 49 photo-data zips, plus 1 metadata zip not counted)"; fail=1
 fi
 
 # 6. Manifest present
@@ -607,8 +607,8 @@ fi
 
 KEY=$(cat "$KEY_FILE")
 zip_count=$(ls $TAKEOUT_GLOB 2>/dev/null | wc -l | tr -d ' ')
-if [[ "$zip_count" != "50" ]]; then
-  echo "Expected 50 zips matching $TAKEOUT_GLOB, found $zip_count" >&2
+if [[ "$zip_count" != "49" ]]; then
+  echo "Expected 49 photo-data zips matching $TAKEOUT_GLOB, found $zip_count" >&2
   exit 1
 fi
 

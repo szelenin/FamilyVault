@@ -120,7 +120,7 @@ The architecture decomposes into phases. Each phase produces working, testable s
 
 - 1.0 — Detach iCloud External Library in Immich (admin → Libraries → delete the icloud-export entry; bytes on disk are untouched). Confirm Immich asset count drops to ~0.
 - 1.1 — Pick tooling (immich-go, gpth + Immich filesystem import, or custom).
-- 1.2 — Import account 1 (largest archive: ~50 zips, target ~80k+ photos).
+- 1.2 — Import the user's Takeout (49 photo-data zips + 1 metadata-HTML zip = 50 total `.zip` files; target ~243k media items per the manifest).
 - 1.3 — Verify: photo counts, GPS preservation, sidecar metadata, Live Photo handling.
 - **Acceptance:** Immich shows only Google-imported assets, with Google's metadata intact and no iCloud duplicates.
 
