@@ -323,7 +323,12 @@ Summary:
 
 ## Phase 5: Ongoing Sync
 
-**Status**: ✅ Complete — daily at 2 AM via launchd
+**Status**: ✅ Complete — daily at 2 AM via launchd. Updated under spec 014:
+`sync.sh` now writes person/album keywords (`--person-keyword
+--album-keyword`) and skips the `--favorite-rating` / `--sidecar` flags
+that would have forced full-library rewrites. Favorites are written by
+a one-shot `scripts/apply-favorites.py` direct exiftool batch when needed
+(see `specs/014-sync-metadata-flags/`).
 
 macOS Sequoia blocks `crontab` modifications without Full Disk Access. Use a launchd
 agent instead. The plist + script are already on the RAID:
