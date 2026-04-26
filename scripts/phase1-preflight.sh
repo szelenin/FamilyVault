@@ -53,12 +53,12 @@ else
   log "immich-go:" "NOT INSTALLED FAIL"; fail=1
 fi
 
-# 5. Exactly 50 takeout zips on disk (the -3-NNN pattern)
+# 5. Exactly 49 takeout zips on disk (the -3-NNN pattern, excluding metadata zip)
 zip_count=$(find "$TAKEOUT_DIR" -name 'takeout-*-3-*.zip' -type f | wc -l | tr -d ' ')
-if [[ "$zip_count" == "50" ]]; then
-  log "Takeout zips on disk:" "50 OK"
+if [[ "$zip_count" == "49" ]]; then
+  log "Takeout zips on disk:" "49 OK"
 else
-  log "Takeout zips on disk:" "$zip_count FAIL (expected 50)"; fail=1
+  log "Takeout zips on disk:" "$zip_count FAIL (expected 49 photo-data zips, plus 1 metadata zip not counted)"; fail=1
 fi
 
 # 6. Manifest present
