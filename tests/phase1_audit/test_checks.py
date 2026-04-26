@@ -7,6 +7,9 @@ from scripts.phase1_audit.checks import (
     check_total_count,
     check_extension_count,
     CheckResult,
+    check_album_count,
+    check_album_names,
+    check_year_folders_not_albums,
 )
 
 
@@ -59,3 +62,62 @@ def test_extension_count_uses_search_metadata() -> None:
     payload = client.search_metadata.call_args.args[0]
     assert ".heic" in payload.get("originalFileName", "").lower() \
         or "heic" in payload.get("originalFileName", "").lower()
+
+
+def test_album_count_exact_match() -> None:
+    m = _manifest(user_album_count=3, user_albums=("A", "B", "C"))
+    client = MagicMock()
+    client.list_albums.return_value = [
+        {"albumName": "A"}, {"albumName": "B"}, {"albumName": "C"}
+    ]
+    r = check_album_count(client, m)
+    assert r.passed is True
+    assert r.actual == 3
+
+
+def test_album_count_mismatch_fails() -> None:
+    m = _manifest(user_album_count=3, user_albums=("A", "B", "C"))
+    client = MagicMock()
+    client.list_albums.return_value = [{"albumName": "A"}]  # only 1
+    r = check_album_count(client, m)
+    assert r.passed is False
+
+
+def test_album_names_all_present() -> None:
+    m = _manifest(user_album_count=2, user_albums=("Trip A", "Trip B"))
+    client = MagicMock()
+    client.list_albums.return_value = [
+        {"albumName": "Trip A"}, {"albumName": "Trip B"}, {"albumName": "Extra"}
+    ]
+    r = check_album_names(client, m)
+    assert r.passed is True
+
+
+def test_album_names_missing_one_fails() -> None:
+    m = _manifest(user_album_count=2, user_albums=("Trip A", "Trip B"))
+    client = MagicMock()
+    client.list_albums.return_value = [{"albumName": "Trip A"}]  # missing Trip B
+    r = check_album_names(client, m)
+    assert r.passed is False
+    assert "Trip B" in r.message
+
+
+def test_year_folders_not_albums_passes_when_clean() -> None:
+    m = _manifest()
+    client = MagicMock()
+    client.list_albums.return_value = [
+        {"albumName": "Trip A"}, {"albumName": "Beach"}
+    ]
+    r = check_year_folders_not_albums(client, m)
+    assert r.passed is True
+
+
+def test_year_folders_not_albums_fails_when_present() -> None:
+    m = _manifest()
+    client = MagicMock()
+    client.list_albums.return_value = [
+        {"albumName": "Trip A"}, {"albumName": "Photos from 2019"}  # leaked
+    ]
+    r = check_year_folders_not_albums(client, m)
+    assert r.passed is False
+    assert "Photos from 2019" in r.message
