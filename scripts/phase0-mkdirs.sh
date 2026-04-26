@@ -9,6 +9,14 @@ DIRS=(
   "/Volumes/HomeRAID/immich-library"
 )
 
+# Fail fast if RAID is not mounted — without this, mkdir -p would silently
+# create /Volumes/HomeRAID/immich-library on the boot disk, breaking the
+# split-storage layout downstream.
+if [[ ! -d /Volumes/HomeRAID ]]; then
+  echo "ERROR: /Volumes/HomeRAID is not mounted. Mount the RAID before running this script." >&2
+  exit 2
+fi
+
 for d in "${DIRS[@]}"; do
   if [[ -d "$d" ]]; then
     echo "Already exists: $d"
