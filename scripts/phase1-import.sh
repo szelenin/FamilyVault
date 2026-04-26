@@ -20,6 +20,11 @@ if [[ "$zip_count" != "49" ]]; then
   exit 1
 fi
 
+if ! command -v immich-go >/dev/null; then
+  echo "immich-go not found on PATH. Install with: brew install immich-go" >&2
+  exit 1
+fi
+
 echo "Starting immich-go import:"
 echo "  zips:        $zip_count"
 echo "  session-tag: $SESSION_TAG"
@@ -38,6 +43,7 @@ immich-go upload from-google-photos \
   --log-file="$LOG_FILE" \
   $TAKEOUT_GLOB
 
-echo "immich-go finished. Resume Immich jobs with:"
-echo "  curl -X PUT -H 'x-api-key: $KEY' '$API/api/jobs/{queue}/resume' (per queue)"
-echo "Or via admin UI: Administration → Jobs → 'Resume All'"
+echo "immich-go finished. Resume Immich jobs via admin UI:"
+echo "  http://localhost:2283 → Administration → Jobs → 'Resume All'"
+echo "Or via API (load API key from $KEY_FILE first):"
+echo "  curl -X PUT -H \"x-api-key: \$KEY\" '$API/api/jobs/<queue>/resume' (per queue)"
