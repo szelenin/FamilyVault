@@ -13,7 +13,8 @@ echo "Writing snapshot to $OUT"
 disk_usage=$(du -sh /Volumes/HomeRAID/immich/* 2>&1 | jq -Rs .)
 
 # Capture container state
-docker_ps=$(docker ps --format '{{.Names}}\t{{.Status}}' 2>&1 | grep -i immich | jq -Rs .)
+docker_immich_lines=$(docker ps --format '{{.Names}}\t{{.Status}}' 2>&1 | grep -i immich || echo "")
+docker_ps=$(printf '%s' "$docker_immich_lines" | jq -Rs .)
 
 # Capture API state if Immich responds
 api_stats="null"
