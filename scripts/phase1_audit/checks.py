@@ -1,5 +1,6 @@
 """Individual audit checks. Each returns a CheckResult."""
 from __future__ import annotations
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,4 +95,56 @@ def check_year_folders_not_albums(client: ImmichClient, manifest: Manifest) -> C
         actual=leaked,
         message=("no year folders leaked as albums" if not leaked
                  else f"year folders found as albums: {leaked}"),
+    )
+
+
+def check_dng_siblings(client: ImmichClient, manifest: Manifest) -> CheckResult:
+    """For each DNG in Immich, check if a HEIC/JPG sibling (same basename) exists.
+
+    This check always 'passes' — its purpose is to populate buckets so the user can
+    decide what to do with DNG-with-sibling vs DNG-only assets.
+    """
+    dngs = client.search_metadata({"originalFileName": ".dng"})
+    dng_total = len(dngs)
+    if dng_total == 0:
+        return CheckResult(
+            name="dng_siblings",
+            passed=True,
+            expected={"dng_total": manifest.count_for_extension("dng")},
+            actual={"dng_total": 0, "with_sibling": 0, "without_sibling": 0,
+                    "with_sibling_files": [], "without_sibling_files": []},
+            message="no DNG assets in Immich; nothing to bucket",
+        )
+
+    sibling_exts = {"heic", "jpg", "jpeg", "png"}
+    with_sibling: list[str] = []
+    without_sibling: list[str] = []
+    for dng in dngs:
+        full = dng.get("originalFileName", "")
+        base = os.path.splitext(full)[0]
+        # Search by basename — one call covers all sibling extensions
+        results = client.search_metadata({"originalFileName": base})
+        found = False
+        for r in results:
+            rname = r.get("originalFileName", "")
+            rext = os.path.splitext(rname)[1].lstrip(".").lower()
+            if (rname.lower() != full.lower()
+                    and rname.lower().startswith(base.lower() + ".")
+                    and rext in sibling_exts):
+                found = True
+                break
+        (with_sibling if found else without_sibling).append(full)
+
+    return CheckResult(
+        name="dng_siblings",
+        passed=True,
+        expected={"dng_total": manifest.count_for_extension("dng")},
+        actual={
+            "dng_total": dng_total,
+            "with_sibling": len(with_sibling),
+            "without_sibling": len(without_sibling),
+            "with_sibling_files": with_sibling[:50],
+            "without_sibling_files": without_sibling[:50],
+        },
+        message=f"DNG buckets — with_sibling={len(with_sibling)} without_sibling={len(without_sibling)}",
     )

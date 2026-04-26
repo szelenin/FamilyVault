@@ -11,6 +11,7 @@ from scripts.phase1_audit.checks import (
     check_album_names,
     check_year_folders_not_albums,
 )
+from scripts.phase1_audit.checks import check_dng_siblings
 
 
 def _manifest(**over) -> Manifest:
@@ -121,3 +122,37 @@ def test_year_folders_not_albums_fails_when_present() -> None:
     r = check_year_folders_not_albums(client, m)
     assert r.passed is False
     assert "Photos from 2019" in r.message
+
+
+def test_dng_siblings_buckets_correctly() -> None:
+    m = _manifest(extension_counts={"json": 0, "dng": 3, "heic": 1, "jpg": 1})
+    client = MagicMock()
+    # Three DNGs in Immich
+    client.search_metadata.side_effect = [
+        # first call: list of DNGs
+        [
+            {"originalFileName": "IMG_001.DNG"},
+            {"originalFileName": "IMG_002.DNG"},
+            {"originalFileName": "IMG_003.DNG"},
+        ],
+        # second call: search for IMG_001 (matches HEIC sibling in this fixture)
+        [{"originalFileName": "IMG_001.HEIC"}],
+        # third call: search for IMG_002 (matches JPG sibling)
+        [{"originalFileName": "IMG_002.jpg"}],
+        # fourth call: search for IMG_003 (no sibling — only the DNG itself)
+        [{"originalFileName": "IMG_003.DNG"}],
+    ]
+    r = check_dng_siblings(client, m)
+    assert r.passed is True  # the check passes if buckets are populated; the user decides what to do
+    assert r.actual["with_sibling"] == 2
+    assert r.actual["without_sibling"] == 1
+    assert r.actual["dng_total"] == 3
+
+
+def test_dng_siblings_passes_when_zero_dng() -> None:
+    m = _manifest(extension_counts={"json": 0, "heic": 5})  # no DNG
+    client = MagicMock()
+    client.search_metadata.return_value = []
+    r = check_dng_siblings(client, m)
+    assert r.passed is True
+    assert r.actual["dng_total"] == 0
