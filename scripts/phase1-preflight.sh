@@ -54,17 +54,25 @@ else
 fi
 
 # 5. Exactly 49 takeout zips on disk (the -3-NNN pattern, excluding metadata zip)
-zip_count=$(find "$TAKEOUT_DIR" -name 'takeout-*-3-*.zip' -type f | wc -l | tr -d ' ')
-if [[ "$zip_count" == "49" ]]; then
-  log "Takeout zips on disk:" "49 OK"
+if [[ ! -d "$TAKEOUT_DIR" ]]; then
+  log "Takeout zips on disk:" "FAIL ($TAKEOUT_DIR not found — RAID unmounted?)"; fail=1
 else
-  log "Takeout zips on disk:" "$zip_count FAIL (expected 49 photo-data zips, plus 1 metadata zip not counted)"; fail=1
+  zip_count=$(find "$TAKEOUT_DIR" -name 'takeout-*-3-*.zip' -type f 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$zip_count" == "49" ]]; then
+    log "Takeout zips on disk:" "49 OK"
+  else
+    log "Takeout zips on disk:" "$zip_count FAIL (expected 49 photo-data zips, plus 1 metadata zip not counted)"; fail=1
+  fi
 fi
 
 # 6. Manifest present
 if [[ -f "$MANIFEST" ]]; then
-  total=$(jq -r .total_files_in_html "$MANIFEST")
-  log "Manifest present:" "$total entries OK"
+  total=$(jq -r '.total_files_in_html // empty' "$MANIFEST" 2>/dev/null)
+  if [[ -n "$total" && "$total" != "null" ]]; then
+    log "Manifest present:" "$total entries OK"
+  else
+    log "Manifest present:" "FAIL (malformed JSON or missing .total_files_in_html in $MANIFEST)"; fail=1
+  fi
 else
   log "Manifest present:" "MISSING ($MANIFEST) FAIL"; fail=1
 fi
