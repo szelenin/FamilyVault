@@ -24,9 +24,9 @@ Backfilling iCloud GPS from Google was the original plan, but reversing the prio
 
 The pivot: **Immich becomes the canonical store of original photo bytes.** Google Takeout contributes its rich metadata (especially GPS) and historical breadth. iCloud contributes wife's manual curation. The architecture supports **ongoing reconciliation** until iCloud is potentially cut off in the future.
 
-## Spike artifacts (on branch `spike-google-icloud-gps`)
+## Spike artifacts
 
-The following files document the GPS measurement that triggered the pivot. They live on the `spike-google-icloud-gps` branch until merged to main.
+The following files document the GPS measurement that triggered the pivot. Originally developed on branch `spike-google-icloud-gps`, merged to main on 2026-04-26 (commit `236e1a9`). All paths below resolve normally on this branch.
 
 - `docs/spike/2026-04-26-google-vs-icloud-gps-design.md` — spike design doc and hypothesis statement.
 - `docs/spike/2026-04-26-google-vs-icloud-gps-plan.md` — phased implementation plan for the spike.
@@ -35,8 +35,6 @@ The following files document the GPS measurement that triggered the pivot. They 
 - `docs/spike/2026-04-26-google-vs-icloud-gps-review.csv` — 60 stratified samples for manual review.
 - `scripts/spike_google_icloud_gps/` — Python implementation: `parser.py`, `stats.py`, `signals.py`, `matcher.py`, `reporter.py`, `sampler.py`, `__main__.py`.
 - `tests/spike_google_icloud_gps/` — 44 unit tests covering parser, stats, signals, matcher, reporter, sampler.
-
-To inspect from this branch: `git show spike-google-icloud-gps:docs/spike/2026-04-26-google-vs-icloud-gps-design.md`.
 
 ## Architecture
 
