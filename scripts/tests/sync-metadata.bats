@@ -104,8 +104,12 @@ setup_file() {
     [ "$fail" -eq 0 ] || { echo "T1: $fail of $checked fixtures failed"; return 1; }
 }
 
-# --- T2 (US2): non-favorite photos carry XMP:Rating=0 -----------------------
-@test "T2_non_favorite_rating_0" {
+# --- T2 (US2): non-favorite photos must NOT carry XMP:Rating=5 --------------
+# After spec amendment: sync.sh no longer writes Rating=0 to non-favorites
+# (osxphotos's --favorite-rating was binary and forced 80k re-exports). For
+# non-favorites, Rating may be absent OR a residual 0 (from earlier partial
+# syncs); both are acceptable. The hard constraint is: Rating MUST NOT be 5.
+@test "T2_non_favorite_rating_not_5" {
     local uuids
     uuids=$(pick_fixture_uuids "ZTRASHEDSTATE=0 AND ZLIBRARYSCOPESHARESTATE!=0 AND (ZFAVORITE IS NULL OR ZFAVORITE=0) ORDER BY ZDATECREATED DESC" 10)
     [ -n "$uuids" ] || { echo "no non-favorited fixtures found"; return 1; }
@@ -118,8 +122,8 @@ setup_file() {
         [ -n "$file" ] && [ -f "$file" ] || { echo "T2: $uuid: not exported (skip)"; continue; }
         local rating
         rating=$(read_exif_field "$file" "XMP:Rating")
-        if [ "$rating" != "0" ]; then
-            echo "T2 FAIL: uuid=$uuid file=$file expected XMP:Rating=0 got '$rating'"
+        if [ "$rating" = "5" ]; then
+            echo "T2 FAIL: uuid=$uuid file=$file is non-favorite but XMP:Rating=5"
             fail=$((fail + 1))
         fi
     done <<< "$uuids"

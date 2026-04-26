@@ -33,6 +33,12 @@
 - Q: Which script becomes canonical and which is deleted? → A: Keep `scripts/sync.sh`; delete `scripts/export-icloud.sh`. launchd already points to `sync.sh`; minimal downstream churn.
 - Q: Sidecar collision policy when an existing sidecar is present? → A: Refresh only when source metadata changed; otherwise leave in place (osxphotos's default `--sidecar` behavior). Preserves idempotency, avoids daily mtime churn on ~80k files.
 
+### Session 2026-04-25 (amendment after Phase 8 attempt)
+
+- Q: How should we write favorites given that osxphotos `--favorite-rating` is binary and forces ALL 80k photos to re-export (10s of days on this RAID)? → A: **Bypass osxphotos for this tag.** Drop `--favorite-rating` from sync.sh. Write `XMP:Rating=5` to favorites only via a direct exiftool batch (`scripts/apply-favorites.py`). Non-favorites have NO Rating tag (Immich treats absent ≡ unrated, identical UX). Reverses Q1 above (Rating=0 → Rating absent for non-favorites). Ratchets the work from ~80k re-exports down to ~1,900 targeted writes.
+- Q: Should sync.sh keep `--sidecar xmp --sidecar json`? → A: No. Drop both. Adding `--sidecar` requires writing 80k × 2 sidecar files (160k total) on top of the 80k photo updates — also unworkable on this RAID. Immich reads embedded EXIF first; sidecars are nice-to-have not must-have. Drops FR-005 from active scope.
+- Q: After dropping the two flags, what's the impact on FR-002 (Rating semantics)? → A: FR-002 is now: *favorited* photos receive `XMP:Rating=5`; *non-favorited* photos have **no Rating tag**. T2 changes from "asserts Rating=0" to "asserts Rating ≠ 5". T9 (user keywords) unaffected. Other FRs unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — One canonical sync script (Priority: P1)
