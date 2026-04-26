@@ -23,3 +23,6 @@ setup/story-engine/music/**/*.mp3
 *.log
 test-results/
 setup/selection-ui/test-results/
+
+# Git worktrees (isolated workspaces for parallel branch work)
+.worktrees/
