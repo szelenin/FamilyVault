@@ -28,8 +28,19 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    sidecars = list(walk_sidecars(args.extracted))
-    print(f"Phase A: parsed {len(sidecars)} sidecars from {args.extracted}")
+    # Filter to PHOTO sidecars only — Google Takeout has non-photo metadata
+    # files (album-titles, user-generated-memory-titles, etc.) whose `title`
+    # field is a list or empty. Real photo sidecars have a string title that
+    # ends in a media extension.
+    all_sidecars = list(walk_sidecars(args.extracted))
+    media_exts = (".heic", ".jpg", ".jpeg", ".png", ".mov", ".mp4", ".dng", ".tiff", ".tif", ".gif")
+    sidecars = [
+        s for s in all_sidecars
+        if isinstance(s["title"], str) and s["title"].lower().endswith(media_exts)
+    ]
+    skipped = len(all_sidecars) - len(sidecars)
+    print(f"Phase A: parsed {len(all_sidecars)} sidecars from {args.extracted}; "
+          f"{len(sidecars)} are photo/video sidecars ({skipped} non-photo skipped)")
     baseline = compute_baseline(sidecars)
     print(f"  total={baseline['total']}  with_geodata={baseline['with_geodata']}  "
           f"geodata_differs_from_exif={baseline['geodata_differs_from_exif']}")
@@ -54,7 +65,18 @@ def main() -> int:
     for i, sc in enumerate(sidecars, 1):
         if i % 200 == 0:
             print(f"  evaluating {i}/{len(sidecars)}...")
-        google_path = sc["sidecar_path"].with_suffix("") if sc["sidecar_path"] else None
+        # Google Takeout sidecars are named "<photo>.supplemental-metadata.json"
+        # Strip the suffix to derive the photo path.
+        google_path = None
+        if sc["sidecar_path"]:
+            sidecar_str = str(sc["sidecar_path"])
+            if sidecar_str.endswith(".supplemental-metadata.json"):
+                google_path = Path(sidecar_str[:-len(".supplemental-metadata.json")])
+            else:
+                google_path = sc["sidecar_path"].with_suffix("")
+            # Confirm the path actually exists on disk; otherwise leave as None
+            if not google_path.exists():
+                google_path = None
         candidates = idx.find_by_filename(sc["title"])
         rows.extend(evaluate_photo(sidecar=sc, google_path=google_path, icloud_candidates=candidates))
 
