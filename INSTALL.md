@@ -689,6 +689,111 @@ echo '=== storage layout (originals on RAID, everything else on internal SSD) ==
 
 ---
 
+## Phase 4: Optional cleanup / decommissioning
+
+These procedures are optional and intentionally separated from the install path. Each has its own trigger condition — only run when that condition is met.
+
+### Step 4.1 — Decommission iCloud sync (after Phase 4 cutover decision is "drop iCloud")
+
+**Trigger condition**: the architecture's Phase 4 cutover (see `docs/architecture/2026-04-26-three-source-merge.md`) has been decided as "drop iCloud Photos" AND all desired iCloud metadata has been merged into Immich (or you've decided not to do the merge).
+
+**[AGENT]**
+
+```bash
+ssh macmini.local "
+# Stop the daily sync cron
+launchctl unload ~/Library/LaunchAgents/com.familyvault.sync.plist 2>/dev/null || true
+
+# Remove the launchd plist
+rm -f ~/Library/LaunchAgents/com.familyvault.sync.plist
+
+# Remove the staged sync.sh from RAID (the source-of-truth copy stays in the repo)
+rm -f /Volumes/HomeRAID/scripts/sync.sh
+"
+```
+
+**Note about the docker-compose mount**: as of commit `f10fd41` on this branch, the read-only iCloud mount is no longer in `setup/immich/docker-compose.yml` (it was dead weight after the postgres wipe). On a fresh install following this guide, no further action is needed.
+
+**Free disk space (optional, irreversible)**:
+
+```bash
+ssh macmini.local "rm -rf /Volumes/HomeRAID/icloud-export"
+```
+
+This deletes the entire iCloud osxphotos export (~1.5 TB or whatever your library size). Only do this once you're certain you won't need it for a future Phase 3 metadata merge — re-creating it requires another full osxphotos run (hours).
+
+### Step 4.2 — Delete Google Takeout zips (after Phase 1.5 audit passes)
+
+**Trigger condition**: Phase 2.8 audit returned all PASS, you've spot-checked photos in Immich UI, and you have no plans to re-run `immich-go`.
+
+The Google Takeout zips at `/Volumes/HomeRAID/google-takeout/` are ~2.4 TB of cold archive after import. They are NOT needed for daily operation — Immich has the bytes in `/Volumes/HomeRAID/immich-library/`.
+
+**[AGENT]** Keep the manifest, delete the zips:
+
+```bash
+ssh macmini.local "
+# Manifest JSON is already committed to the repo — no need to keep the HTML
+rm -f /Volumes/HomeRAID/google-takeout/takeout-*.zip
+rm -f /Volumes/HomeRAID/google-takeout/rclone.log
+"
+```
+
+**Verify**:
+
+```bash
+ssh macmini.local "ls -la /Volumes/HomeRAID/google-takeout/"
+```
+
+**Expected**: empty or contains only the rclone log if not deleted.
+
+**Free space recovered**: ~2.4 TB on RAID.
+
+**Cost of reversal**: re-ordering Google Takeout (2-5 day wait) + downloading the zips again. The committed `docs/architecture/google-takeout-manifest.json` survives so audit re-runs work without the zips.
+
+### Step 4.3 — Wipe Immich and start over
+
+**Trigger condition**: the import or post-import state is irrecoverable, or you want to test a different architecture/version.
+
+The destructive scripts are checked in. They refuse to run if Immich containers are up, and the wipe script requires you to type `WIPE` to confirm.
+
+**[AGENT]** Snapshot first (best-effort, captures disk usage and API state if Immich is reachable):
+
+```bash
+ssh macmini.local "cd ~/projects/takeout/takeout && ./scripts/phase0-snapshot.sh /tmp/immich-pre-wipe-state.json"
+```
+
+**[AGENT]** Stop Immich and wipe:
+
+```bash
+ssh macmini.local "
+cd ~/projects/takeout/takeout/setup/immich
+docker compose down
+
+cd ~/projects/takeout/takeout
+echo 'WIPE' | ./scripts/phase0-wipe.sh
+./scripts/phase0-mkdirs.sh
+"
+```
+
+The wipe removes `/Volumes/HomeRAID/immich/{upload,model-cache,postgres,api-key.txt,library-id.txt}` — everything related to Immich on RAID. The `phase0-mkdirs.sh` recreates the directory structure for the new install.
+
+**To re-install**, follow this guide from Phase 1.
+
+**Note on the new layout**: `phase0-wipe.sh` was written for the original RAID-only layout. On the current split-storage layout, the `/Users/szelenin/immich-data/` directories on internal SSD also need wiping. Until that script is updated:
+
+```bash
+ssh macmini.local "
+docker compose -f ~/projects/takeout/takeout/setup/immich/docker-compose.yml down
+rm -rf /Users/szelenin/immich-data/{upload,postgres}
+mkdir -p /Users/szelenin/immich-data/{upload,postgres,model-cache}
+chmod 700 /Users/szelenin/immich-data/postgres
+"
+```
+
+(Keep `model-cache` to avoid re-downloading ML models. Leave `/Volumes/HomeRAID/immich-library/` empty for the next import to populate.)
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
