@@ -37,7 +37,7 @@ sleep 5
 immich-go upload from-google-photos \
   --server="$API" \
   --api-key="$KEY" \
-  --concurrent-tasks=4 \
+  --concurrent-tasks=2 \
   --client-timeout=60m \
   --pause-immich-jobs \
   --on-errors=continue \
