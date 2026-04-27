@@ -96,6 +96,53 @@ These choices are necessary to proceed autonomously without blocking on user inp
 - Both processes detached via `nohup ... &`; PIDs saved to `/Users/szelenin/immich-data/{import,monitor}.pid`.
 - After 5 minutes: discovery phase has read ~32,700 items from 2 of 49 zips. immich-go using 1.2% CPU, 288 MB RSS — light load. Discovery typically takes 30–90 minutes; expect first uploads to start ~19:45–20:30.
 
+### 2026-04-27 — incident: OrbStack SIGKILL, internal SSD full, mount path bug
+
+**The first import run failed catastrophically after ~3.5 hours.** Postmortem follows.
+
+**Symptom timeline (in UTC):**
+- 23:12 (2026-04-26): import started, immich-go in discovery.
+- 23:56: first uploads to Immich, asset count growing.
+- 06:25 next morning (=22:25 PT prior day, equiv 02:25 UTC the day after): immich-go log shows `broken pipe` errors on every upload. Upload throughput effectively zero from this point onward.
+- 06:25 → ~11:00: immich-go kept retrying, generating ~209 MB of error log entries; postgres on internal SSD spammed WAL.
+- ~11:00: macOS dialog reported "OrbStack stopped unexpectedly: killed (SIGKILL)" with prior errors `failed to send fsnotify events / context deadline exceeded / endpoint is closed for send`.
+- ~11:13: User noticed. Investigation began.
+
+**Root causes (two stacked bugs):**
+
+1. **Mount path bug in the original split-storage commit (`633e87f`).** The plan and design assumed Immich writes uploaded asset bytes to `/usr/src/app/upload/library/<userId>/<...>`. Empirical reality on Immich v2.6.3 with storage template **disabled** (our config): bytes go to `/usr/src/app/upload/upload/<userId>/<XX>/<YY>/<assetUUID>.<ext>` — `library/` is only used when storage template is enabled. The original mount put RAID at `/upload/library`, which Immich never wrote to. Result: all 100k+ uploaded asset bytes (~271 GB) landed on **internal SSD**'s `/upload/upload/`, not on RAID.
+2. **Internal SSD ran out.** The Mac Mini's internal SSD has 460 GB total; pre-import we had ~247 GB free. The first 100k assets at ~2.7 MB average = 271 GB written there. Add ~1.1 GB postgres growth + macOS swap pressure under memory load + Library state — internal hit 888 MB free. Once the disk crossed the danger threshold, OrbStack's VM started failing internal network sends ("endpoint is closed for send") because the host could no longer back its file system. macOS eventually SIGKILLed the OrbStack helper to recover memory.
+
+**Recovery decision (operator):** clean reset. Lost ~5 hours of failed-retry work and the 100k successful uploads. Cost: re-importing 100k photos costs ~10 hours but avoids any risk of partial-state postgres rows pointing at moved files.
+
+**Recovery steps actually taken:**
+
+1. `kill -9` the failing immich-go process (the bash wrapper plus its child).
+2. `docker compose down` from the compose-file directory (running `down` from elsewhere couldn't load `.env` and silently failed).
+3. `rm -rf /Users/szelenin/immich-data/{upload,postgres,*.log,*.pid,*.txt}` — frees the 271 GB. Internal SSD went from 888 MB free to 273 GB free.
+4. `Edit setup/immich/docker-compose.yml`: change the inner override mount from `${UPLOAD_LOCATION}/library` to `${UPLOAD_LOCATION}/upload`. Two services touched (immich-server, immich-microservices), one identical line in each — `replace_all=true` handled it. Committed as `6a3ef34`.
+5. Recreate the now-deleted directories: `mkdir -p /Users/szelenin/immich-data/{upload,postgres,model-cache} && chmod 700 .../postgres`. Also `rm -f /Volumes/HomeRAID/immich-library/.immich` (Immich-marker file from the failed run; new run will recreate).
+6. `docker compose up -d` from the compose-file directory; waited for `immich-server` to report `(healthy)`.
+7. Verified mount layout via `docker inspect`:
+   ```
+   /Users/szelenin/immich-data/upload → /usr/src/app/upload         (internal SSD, parent)
+   /Volumes/HomeRAID/immich-library → /usr/src/app/upload/upload    (RAID, where bytes actually go)
+   /Volumes/HomeRAID/icloud-export → /usr/src/app/icloud-export     (read-only)
+   ```
+   This is the correct split.
+8. Re-bootstrapped admin user via `POST /api/auth/admin-sign-up` with the same email but a fresh random password. Created new API key. Saved both with mode 600.
+9. Re-disabled video transcoding via `PUT /api/system-config`.
+10. Pre-flight all-green again. Restarted import + monitor as detached `nohup` processes. New PIDs in `/Users/szelenin/immich-data/{import,monitor}.pid`.
+
+**Lessons baked into the codebase:**
+
+- Mount path fix: `setup/immich/docker-compose.yml` permanently corrected. Future runs go to RAID.
+- This postmortem itself: lives in this execution log; INSTALL.md will be rewritten with the corrected layout so future installers don't repeat the bug.
+- Resource budget: the Mac Mini's 24 GB RAM is the actual ceiling, not OrbStack's slider. Import resource pressure now documented in INSTALL.md Phase 1.1.
+- `--remove-source-files` rsync pattern noted as the safer recovery path if this ever happens again with valuable in-progress data we want to preserve.
+
+**Open question deferred:** the immich-go discovery phase took 44 minutes on the first run. The same archive needs to be re-discovered now. There is no way to skip it (immich-go has no checkpoint). Cost is fixed: ~45 min before uploads resume.
+
 ### Status when handing back to user
 
 - **Import is running.** Both `import` (PID per `/Users/szelenin/immich-data/import.pid`) and `monitor` (PID per `/Users/szelenin/immich-data/monitor.pid`) are alive.
