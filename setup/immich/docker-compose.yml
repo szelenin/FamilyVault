@@ -19,7 +19,7 @@ services:
       - "2283:2283"
     volumes:
       - /Users/szelenin/immich-data/upload:${UPLOAD_LOCATION}
-      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/library
+      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/upload
       - /Volumes/HomeRAID/icloud-export:/usr/src/app/icloud-export:ro
 
   immich-microservices:
@@ -39,7 +39,7 @@ services:
       MACHINE_LEARNING_URL: http://immich-machine-learning:3003
     volumes:
       - /Users/szelenin/immich-data/upload:${UPLOAD_LOCATION}
-      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/library
+      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/upload
       - /Volumes/HomeRAID/icloud-export:/usr/src/app/icloud-export:ro
 
   immich-machine-learning:
