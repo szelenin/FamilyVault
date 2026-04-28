@@ -111,7 +111,9 @@ These choices are necessary to proceed autonomously without blocking on user inp
 **Root causes (two stacked bugs):**
 
 1. **Mount path bug in the original split-storage commit (`633e87f`).** The plan and design assumed Immich writes uploaded asset bytes to `/usr/src/app/upload/library/<userId>/<...>`. Empirical reality on Immich v2.6.3 with storage template **disabled** (our config): bytes go to `/usr/src/app/upload/upload/<userId>/<XX>/<YY>/<assetUUID>.<ext>` — `library/` is only used when storage template is enabled. The original mount put RAID at `/upload/library`, which Immich never wrote to. Result: all 100k+ uploaded asset bytes (~271 GB) landed on **internal SSD**'s `/upload/upload/`, not on RAID.
-2. **Internal SSD ran out.** The Mac Mini's internal SSD has 460 GB total; pre-import we had ~247 GB free. The first 100k assets at ~2.7 MB average = 271 GB written there. Add ~1.1 GB postgres growth + macOS swap pressure under memory load + Library state — internal hit 888 MB free. Once the disk crossed the danger threshold, OrbStack's VM started failing internal network sends ("endpoint is closed for send") because the host could no longer back its file system. macOS eventually SIGKILLed the OrbStack helper to recover memory.
+2. **Internal SSD ran out.** The Mac Mini's internal SSD has 460 GB total; pre-import we had ~247 GB free. The first 100k assets at ~2.7 MB average = 271 GB written there. Add ~1.1 GB postgres growth + Library state — internal hit 888 MB free. Once the disk crossed the danger threshold, OrbStack's VM started failing internal writes and network sends ("endpoint is closed for send") because the host's filesystem layer ran out of room to back the VM's I/O. macOS eventually SIGKILLed the OrbStack helper.
+
+**Note on what the cause was NOT:** earlier drafts of this log attributed the SIGKILL to host RAM pressure, citing `vm_stat`'s "Pages free" near zero. That was a misreading. macOS treats unallocated pages as wasted RAM and aggressively keeps "Pages free" near zero by design. The correct host-pressure indicator is `memory_pressure`'s `Normal/Warn/Critical` state and Activity Monitor's pressure-graph color. On a 24 GB Mac Mini during this incident, ~13 GB was effectively available (much of the 24 GB was reclaimable file cache) and `memory_pressure` reported `Normal`. The host wasn't out of RAM — the host was out of **disk** for the in-flight bytes that had landed on internal SSD instead of RAID. The mount-path bug was the actual root cause; SSD fill was the proximate symptom; SIGKILL was OrbStack failing under filesystem pressure, not RAM pressure.
 
 **Recovery decision (operator):** clean reset. Lost ~5 hours of failed-retry work and the 100k successful uploads. Cost: re-importing 100k photos costs ~10 hours but avoids any risk of partial-state postgres rows pointing at moved files.
 
@@ -138,7 +140,7 @@ These choices are necessary to proceed autonomously without blocking on user inp
 
 - Mount path fix: `setup/immich/docker-compose.yml` permanently corrected. Future runs go to RAID.
 - This postmortem itself: lives in this execution log; INSTALL.md will be rewritten with the corrected layout so future installers don't repeat the bug.
-- Resource budget: the Mac Mini's 24 GB RAM is the actual ceiling, not OrbStack's slider. Import resource pressure now documented in INSTALL.md Phase 1.1.
+- Resource budget: ~~the Mac Mini's 24 GB RAM is the actual ceiling, not OrbStack's slider~~ — this turned out to be wrong. Activity Monitor showed `memory_pressure: Normal` throughout, with ~13 GB effectively available on 24 GB. The first crash was caused by **internal SSD running out of disk**, not host RAM. INSTALL.md Phase 1.1 still has the VM resource math (which is useful for sizing the VM ceiling against the host) but the post-crash symptom was disk-driven, not RAM-driven.
 - `--remove-source-files` rsync pattern noted as the safer recovery path if this ever happens again with valuable in-progress data we want to preserve.
 
 **Open question deferred:** the immich-go discovery phase took 44 minutes on the first run. The same archive needs to be re-discovered now. There is no way to skip it (immich-go has no checkpoint). Cost is fixed: ~45 min before uploads resume.
@@ -161,3 +163,27 @@ These choices are necessary to proceed autonomously without blocking on user inp
   - `/Users/szelenin/immich-data/admin-password.txt` (mode 600)
   - `/Users/szelenin/immich-data/api-key.txt` (mode 600)
 - **What you'll see in the meantime:** Immich web UI at http://localhost:2283 (login: sergey.zelenin@gmail.com / cat the admin-password file). Photo count will grow over time. Don't manually pause/resume jobs — the import has paused them via flag.
+
+### 2026-04-27 — second OrbStack SIGKILL (cause unclear, NOT host RAM)
+
+Second incident: the corrected-mount run reached ~118,688 assets in ~6.5 hours and was SIGKILLed again. Differences from incident #1:
+
+- **Internal SSD stayed flat at 270 GB free throughout.** The mount-path fix held — bytes were correctly going to RAID, not internal.
+- **Host memory pressure was Normal.** Discovered later (after Activity Monitor inspection) that `memory_pressure` was reporting `Normal` for the whole run; raw "Pages free" being near zero is normal macOS behavior, not a pressure signal. ~13 GB of the 24 GB host RAM was effectively available the whole time.
+- **immich-go log** showed the same `failed to send fsnotify events / endpoint is closed for send` errors before the SIGKILL. Same VM-internal symptom; different host-side root cause.
+
+**Working hypothesis (not confirmed):** the issue is inside the OrbStack VM, not the host. Postgres + immich-server peak under sustained upload exceed the 12 GB VM ceiling, the VM swaps inside its own boundary, OrbStack's network forwarding starts dropping `fsnotify` events, and macOS eventually kills the helper because the VM is unresponsive (not because the host is starving for RAM).
+
+**Mitigations applied for the second restart** (still under observation as of this writing):
+
+- `docker compose stop immich-microservices immich-machine-learning` (those were idle anyway under `--pause-immich-jobs=true`; saves ~700 MB inside the VM).
+- `--concurrent-tasks=4 → 2` in `phase1-import.sh` (~300 MB less in-flight upload buffer inside the VM).
+- Killed `photoanalysisd` (487 MB on host) — but this was based on the wrong host-RAM theory and likely didn't matter; macOS is expected to respawn it.
+
+**The actual right next mitigation if a third crash happens:** bump OrbStack VM memory ceiling from 12 GB to 14 GB in OrbStack Settings → System → Memory. With ~13 GB effectively available on a 24 GB Mac Mini, the host can support a 14 GB VM ceiling without pressure. This addresses VM-internal pressure (the actual culprit) directly.
+
+**Lessons updated:**
+
+- "Pages free near zero" on macOS ≠ memory pressure. Use `memory_pressure` (state command) or Activity Monitor's pressure graph instead.
+- VM-internal pressure (under the OrbStack ceiling) is a separate failure mode from host pressure. Watch via `docker stats --no-stream` per-container, not host vm_stat.
+- The two crashes had different root causes: #1 = disk fill (mount path bug, fixed); #2 = VM-internal pressure (working theory; mitigated by stopping idle containers + lower concurrency, not yet confirmed).

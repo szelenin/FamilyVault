@@ -559,13 +559,21 @@ tail -3 /Users/szelenin/immich-data/import-progress.log"
 
 The discovery phase typically takes 30–90 minutes before the first asset uploads. After that, expect ~500–1500 assets/min throughput.
 
-**Watch host memory pressure during the run** (separate session — this is what would have caught the first run's SIGKILL):
+**Watch host memory state and per-container memory during the run** (separate session):
 
 ```bash
-ssh macmini.local "memory_pressure 2>&1 | head -3 && /usr/local/bin/docker stats --no-stream"
+ssh macmini.local "memory_pressure 2>&1 | head -1 && /usr/local/bin/docker stats --no-stream"
 ```
 
-If `memory_pressure` reports beyond `Normal`, or any container's `MEM USAGE` exceeds ~80% of its allotment, stop the import (`kill $(cat /Users/szelenin/immich-data/import.pid)`), reduce `--concurrent-tasks` in `scripts/phase1-import.sh` to 2, and re-run. Server-side hash dedup will skip already-uploaded photos.
+The right host signal is the FIRST line of `memory_pressure` — it prints `System-wide memory free percentage: NN%` followed by the pressure state (`Normal`, `Warn`, or `Critical`). **Do not interpret `vm_stat`'s "Pages free" as available RAM** — macOS aggressively keeps "Pages free" near zero by design (empty RAM is wasted RAM); the file cache is reclaimable on demand. The Activity Monitor "Memory Pressure" graph (color: green/yellow/red) is the visual equivalent of `memory_pressure`'s state.
+
+If the host pressure is `Warn` or `Critical`, OR any container's `MEM USAGE` is sustained at >80% of its allotment, stop the import (`kill $(cat /Users/szelenin/immich-data/import.pid)`) and apply mitigations in this priority order:
+
+1. **Bump OrbStack VM memory ceiling** (Settings → System → Memory). On a 24 GB Mac Mini with `Normal` host pressure, increasing from the default 12 GB to 14–16 GB is safe and addresses VM-internal pressure (postgres + Immich-server sustained peak).
+2. **Stop the idle containers during import**: `docker compose stop immich-microservices immich-machine-learning`. They sit idle anyway when `--pause-immich-jobs=true` is set; this frees ~700 MB inside the VM.
+3. **Reduce `--concurrent-tasks`** in `scripts/phase1-import.sh` from 4 to 2 (less upload buffer in flight, ~300 MB inside the VM). Slower throughput by ~30% but more predictable under pressure.
+
+After applying mitigations, restart the import — server-side hash dedup will skip already-uploaded photos.
 
 **Watch disk fill rate during the run** (catches mount path bugs early):
 
@@ -799,7 +807,8 @@ chmod 700 /Users/szelenin/immich-data/postgres
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Internal SSD fills rapidly during import | Mount layout wrong — bytes going to internal instead of RAID | Verify Step 1.4's `docker inspect` shows `/Volumes/HomeRAID/immich-library → /usr/src/app/upload/upload` (not `/upload/library`). If wrong, follow the post-mortem in `docs/architecture/phase-1-run/execution-log.md` for clean recovery |
-| OrbStack VM killed (SIGKILL) mid-import | Mac Mini host RAM exhausted | Lower `--concurrent-tasks` in `phase1-import.sh`; close other apps; verify VM memory limit ≤ host total - 9 GB |
+| OrbStack VM killed (SIGKILL) mid-import, internal SSD running low | Mount path bug — bytes landing on internal SSD instead of RAID | Verify Step 1.4's `docker inspect` shows `/Volumes/HomeRAID/immich-library → /usr/src/app/upload/upload`. If wrong, follow recovery in `docs/architecture/phase-1-run/execution-log.md`. |
+| OrbStack VM killed (SIGKILL) mid-import, disk free, host pressure Normal | VM-internal pressure (postgres + Immich-server peak exceeds VM ceiling) | Bump OrbStack VM memory in Settings → System → Memory (try +2–4 GB); also stop `immich-microservices` and `immich-machine-learning` containers during import; lower `--concurrent-tasks` to 2. Do NOT interpret `vm_stat`'s "Pages free" as host pressure — use `memory_pressure` state instead. |
 | immich-go discovery phase re-runs every retry | Expected — no checkpoint resume | Avoid mid-run crashes (stable power, tmux session); each retry costs ~30–90 min before uploads resume |
 | Photo count below expected after audit | Some files errored during upload | Re-run `phase1-import.sh`; server-side hash dedup skips successes; only failed photos retry |
 | Live Photos imported as separate HEIC + MOV | immich-go pairing bug ([#1298](https://github.com/simulot/immich-go/issues/1298)) | Phase 1.5 audit reports unpaired count; mitigation deferred to architecture Open Item #6 |
