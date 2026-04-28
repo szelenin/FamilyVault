@@ -53,14 +53,14 @@ def test_total_count_fail_outside_tolerance() -> None:
     assert "0" in r.message
 
 
-def test_extension_count_uses_search_metadata() -> None:
+def test_extension_count_uses_search_metadata_count() -> None:
     m = _manifest()  # heic = 30
     client = MagicMock()
-    client.search_metadata.return_value = [{"id": str(i)} for i in range(30)]
+    client.search_metadata_count.return_value = 30
     r = check_extension_count(client, m, "heic", tolerance=0.01)
     assert r.passed is True
-    client.search_metadata.assert_called_once()
-    payload = client.search_metadata.call_args.args[0]
+    client.search_metadata_count.assert_called_once()
+    payload = client.search_metadata_count.call_args.args[0]
     assert ".heic" in payload.get("originalFileName", "").lower() \
         or "heic" in payload.get("originalFileName", "").lower()
 

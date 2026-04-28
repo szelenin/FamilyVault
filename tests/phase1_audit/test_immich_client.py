@@ -36,6 +36,7 @@ def test_client_list_albums_returns_list() -> None:
 
 
 def test_client_search_metadata_posts_payload() -> None:
+    # 1 item back is less than the page size (1000) so pagination short-circuits after 1 page
     body = {"assets": {"items": [{"originalFileName": "a.heic"}], "total": 1}}
     with patch("requests.post", return_value=_mock_response(json_body=body)) as p:
         c = ImmichClient(server="http://x", api_key="k")
@@ -43,4 +44,32 @@ def test_client_search_metadata_posts_payload() -> None:
     assert items == body["assets"]["items"]
     args, kwargs = p.call_args
     assert args[0] == "http://x/api/search/metadata"
-    assert kwargs["json"] == {"originalFileName": ".heic"}
+    # search_metadata adds size + page for pagination control
+    assert kwargs["json"] == {"originalFileName": ".heic", "size": 1000, "page": 1}
+
+
+def test_client_search_metadata_paginates_when_page_full() -> None:
+    """When a page returns exactly size items, fetch the next page until partial."""
+    page1 = {"assets": {"items": [{"id": str(i)} for i in range(1000)], "total": 1500}}
+    page2 = {"assets": {"items": [{"id": str(i)} for i in range(500)], "total": 1500}}
+    with patch("requests.post", side_effect=[_mock_response(json_body=page1),
+                                             _mock_response(json_body=page2)]) as p:
+        c = ImmichClient(server="http://x", api_key="k")
+        items = c.search_metadata({"originalFileName": ".heic"})
+    assert len(items) == 1500
+    assert p.call_count == 2
+    # Second call should be page 2
+    second_call_kwargs = p.call_args_list[1].kwargs
+    assert second_call_kwargs["json"]["page"] == 2
+
+
+def test_client_search_metadata_count_paginates_and_sums() -> None:
+    """search_metadata_count walks pages (Immich's 'total' is per-page, not overall)."""
+    page1 = {"assets": {"items": [{"id": str(i)} for i in range(1000)]}}  # full page
+    page2 = {"assets": {"items": [{"id": str(i)} for i in range(347)]}}   # partial → last page
+    with patch("requests.post", side_effect=[_mock_response(json_body=page1),
+                                             _mock_response(json_body=page2)]) as p:
+        c = ImmichClient(server="http://x", api_key="k")
+        count = c.search_metadata_count({"originalFileName": ".heic"})
+    assert count == 1347
+    assert p.call_count == 2

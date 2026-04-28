@@ -1,0 +1,73 @@
+2026-04-28 16:44:48 INF Asset Tracking Report:
+2026-04-28 16:44:48 INF =====================
+2026-04-28 16:44:48 INF Total Assets:     242656  (2.4 TB)
+2026-04-28 16:44:48 INF   Processed:      228886  (2.3 TB)
+2026-04-28 16:44:48 INF   Discarded:        6703  (18.1 GB)
+2026-04-28 16:44:48 INF   Errors:             21  (2.2 GB)
+2026-04-28 16:44:48 INF   Pending:          7046  (22.3 GB)
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF ⚠️  WARNING: 7046 assets did not reach a final state!
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Event Report:
+2026-04-28 16:44:48 INF =============
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Discovery (Assets):
+2026-04-28 16:44:48 INF   discovered image                   :  170104  (264.2 GB)
+2026-04-28 16:44:48 INF   discovered video                   :   72552  (2.1 TB)
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Discovery (Non-Assets):
+2026-04-28 16:44:48 INF   discovered sidecar                 :  203731  (122.9 MB)
+2026-04-28 16:44:48 INF   discovered unknown file            :     321  (-)
+2026-04-28 16:44:48 INF   discovered unsupported file        :      68  (3.2 KB)
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Asset Lifecycle (PROCESSED):
+2026-04-28 16:44:48 INF   uploaded successfully              :   90195  (1.9 TB)
+2026-04-28 16:44:48 INF   server asset upgraded              :     694  (2.7 GB)
+2026-04-28 16:44:48 INF   metadata updated                   :  229326  (440.0 GB)
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Asset Lifecycle (DISCARDED):
+2026-04-28 16:44:48 INF   server has duplicate               :  137995  (439.5 GB)
+2026-04-28 16:44:48 INF   discarded local duplicate          :    5571  (17.6 GB)
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Asset Lifecycle (ERROR):
+2026-04-28 16:44:48 INF   server error                       :      21
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 INF Processing Events:
+2026-04-28 16:44:48 INF   associated metadata                :  235610
+2026-04-28 16:44:48 INF   missing metadata                   :    7046
+2026-04-28 16:44:48 INF   stacked                            :   11024
+2026-04-28 16:44:48 INF   added to album                     :    2274
+2026-04-28 16:44:48 INF   tagged                             :  243397
+2026-04-28 16:44:48 INF 
+2026-04-28 16:44:48 ERR Some errors have occurred. Look at the log file for details
+
+
+=== Error breakdown ===
+ 578 err=AssetUpload
+  66 err=TagAssets
+   2 err=CreateAlbum
+   1 err=updateAsset
+   1 err=AddAssetToAlbum
+
+=== sample ERR lines (first 5 of each type) ===
+
+--- err=AssetUpload ---
+2026-04-27 09:52:07 ERR Error err=AssetUpload, POST, http://localhost:2283/api/assets
+2026-04-27 09:52:07 ERR Error err=AssetUpload, POST, http://localhost:2283/api/assets
+2026-04-27 09:52:07 ERR Error err=AssetUpload, POST, http://localhost:2283/api/assets
+
+--- err=TagAssets ---
+2026-04-27 08:05:08 ERR failed to add assets to tag err=TagAssets, PUT, http://localhost:2283/api/tags/1d9ee916-80e7-4a9e-988c-0b3a4f302ce5/assets, 500 Internal Server Error
+2026-04-27 08:05:12 ERR failed to add assets to tag err=TagAssets, PUT, http://localhost:2283/api/tags/901621f6-ca16-46f7-b553-f93ad277b4f3/assets, 500 Internal Server Error
+2026-04-27 08:07:42 ERR failed to add assets to tag err=TagAssets, PUT, http://localhost:2283/api/tags/8295384b-6fa3-4fd0-97ad-300ccaeb6445/assets, 500 Internal Server Error
+
+--- err=CreateAlbum ---
+2026-04-27 07:53:02 ERR failed to create album err=CreateAlbum, POST, http://localhost:2283/api/albums, 400 Bad Request
+2026-04-27 07:53:20 ERR failed to create album err=CreateAlbum, POST, http://localhost:2283/api/albums, 400 Bad Request
+
+--- err=updateAsset ---
+2026-04-27 16:05:19 ERR Error err=updateAsset, PUT, http://localhost:2283/api/assets/be904579-176c-4a59-8b40-cc33ed02317d
+
+--- err=AddAssetToAlbum ---
+2026-04-28 16:44:46 ERR failed to add assets to album err=AddAssetToAlbum, PUT, http://localhost:2283/api/albums/066de9de-eeab-46fd-b7e7-21c311ff88ce/assets, 400 Bad Request

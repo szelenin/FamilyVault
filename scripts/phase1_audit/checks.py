@@ -44,8 +44,7 @@ def check_extension_count(client: ImmichClient, manifest: Manifest,
                           ext: str, tolerance: float = 0.01) -> CheckResult:
     """Verify Immich's count of assets ending in .<ext> matches manifest within tolerance."""
     expected = manifest.count_for_extension(ext)
-    items = client.search_metadata({"originalFileName": f".{ext.lower()}"})
-    actual = len(items)
+    actual = client.search_metadata_count({"originalFileName": f".{ext.lower()}"})
     passed = _within_tolerance(actual, expected, tolerance)
     return CheckResult(
         name=f"extension_count_{ext.lower()}",

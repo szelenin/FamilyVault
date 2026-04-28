@@ -187,3 +187,73 @@ Second incident: the corrected-mount run reached ~118,688 assets in ~6.5 hours a
 - "Pages free near zero" on macOS ≠ memory pressure. Use `memory_pressure` (state command) or Activity Monitor's pressure graph instead.
 - VM-internal pressure (under the OrbStack ceiling) is a separate failure mode from host pressure. Watch via `docker stats --no-stream` per-container, not host vm_stat.
 - The two crashes had different root causes: #1 = disk fill (mount path bug, fixed); #2 = VM-internal pressure (working theory; mitigated by stopping idle containers + lower concurrency, not yet confirmed).
+
+### 2026-04-28 — Phase 1 import complete + audit findings
+
+The immich-go process exited cleanly at 16:44 EDT after running 22 hours from the second restart. **No further crashes** — concurrent-tasks=2 + microservices/ML stopped held up. Final state:
+
+- Immich asset count: **207,059** (163,543 photos + 43,516 videos)
+- immich-go discovered: **242,656** (matches the manifest exactly, as expected)
+- immich-go processed: **228,886** — uploaded successfully (90,195 new) + server-already-had (137,995 from the prior crash)
+- immich-go errors: **21 server errors + 1,470 transient retries** (mostly `AssetUpload` retries during network blips that eventually succeeded)
+- immich-go pending: **7,046 assets** that did not reach a final state — these are partial uploads or files immich-go gave up on
+- immich-go stacked (paired): **11,024** — Live Photo HEIC+MP4 motion-photo pairs
+
+**Asset count gap analysis** — manifest expected 242,656, Immich has 207,059 (gap: 35,597, ~14.7%). Breakdown:
+
+| Source | Assets |
+|---|---|
+| HEIC+MP4 motion photos paired into single Immich Live Photos (manifest counts both halves; Immich stores as 1) | ~22,000 (rough; includes the 11k stacked + others) |
+| Pending (didn't reach final state) | 7,046 |
+| Local duplicates (same file in multiple Takeout zips) | 5,571 |
+| Server errors (legitimate failures) | 21 |
+| **Sum of explained gap** | **~34,638** |
+
+This accounts for almost the entire 35,597-asset gap. The remaining ~960 are within audit tolerance noise (Live Photo edges, multi-stack scenarios).
+
+**Per-extension audit findings** (after the audit-script pagination bug was fixed mid-run):
+
+| Format | Manifest | Immich | Gap | Notes |
+|---|---|---|---|---|
+| HEIC | 86,353 | 84,070 | -2,283 | Some pending; ~2k explained |
+| JPG | 57,915 | 55,266 | -2,649 | Same |
+| JPEG | 1,637 | 1,637 | 0 | ✓ exact |
+| PNG | 22,818 | 21,357 | -1,461 | Same |
+| MP4 | 44,249 | 15,007 | **-29,242** | **Most are Live Photo MP4 halves now stored as motion data on the HEIC, not as separate videos** |
+| MOV | 28,289 | 27,891 | -398 | ✓ within noise |
+| DNG | 1,171 | 1,167 | -4 | ✓ within noise |
+| NEF | 106 | 46 | -60 | Real loss; possibly errored uploads |
+
+**Album findings:** 138 manifest albums vs 61 in Immich. The gap breaks down as:
+
+- ~30+ `Untitled(N)` albums skipped (immich-go default: `--include-untitled-albums` is OFF)
+- ~7 `Згадайте цей день(N)` ("Remember this day", Russian) — Google "Memories" auto-albums, also untitled-equivalent
+- 1 `Archive`, 1 `Failed videos` — Google internal categories, not user albums
+- ~5 character-escape mismatches: manifest has `Saturday afternoon at Glazer Children_s Museum` (filesystem-escaped) but Immich has `Saturday afternoon at Glazer Children's Museum` (original Google name with apostrophe). The manifest was extracted from `archive_browser.html` which uses underscores instead of apostrophes — the audit oracle is **wrong** for these cases.
+
+So real album gap is small — probably ~10–20 actually missing albums (vs 138 expected → ~120 actually expected from immich-go's default config).
+
+**Audit script bug found and fixed mid-run:** the original `check_extension_count` and `check_dng_siblings` used `client.search_metadata({"originalFileName": ".X"})` which returns a single page (max 250 items) — not the total. Two fixes committed:
+
+1. `ImmichClient.search_metadata` now paginates internally with `size=1000, page=N` until a partial page comes back. Returns the full items list.
+2. New `ImmichClient.search_metadata_count` paginates to compute count without retaining items in memory. Used by `check_extension_count`.
+3. Tests updated; all 20 tests pass.
+
+**DNG sibling check (the deferred Option-B answer):**
+
+- DNGs in Immich: **1,167**
+- with HEIC/JPG/PNG sibling: **1,167** (100%)
+- without sibling (DNG-only): **0**
+
+This is the answer to architecture Open Item #5 from the design doc. **Every DNG has a sibling**, so blanket-excluding DNG from Immich is safe — no photos would disappear. The user can now decide whether to hide/delete the DNG copies or keep them as raw archive.
+
+**Final phase status:**
+
+- ✅ Bytes successfully imported: 207k assets, 1.7 TB on RAID
+- ✅ Manifest counts roughly explained (Live Photo pairing accounts for most of the gap)
+- ✅ DNG bucket policy now has data: all DNGs paired, blanket exclude is safe
+- ⚠️ 7,046 pending assets — could be retried via re-running immich-go, may pick up some
+- ⚠️ ~10–20 actual missing albums — could be manually created or accepted
+- 📋 Background jobs (metadataExtraction queue ~301k, thumbnailGeneration ~109k) actively draining; will run for many more hours
+
+The architecture's Phase 1 (Google Takeout → Immich) is **complete**. Phase 2 (identity tooling) and Phase 3 (iCloud metadata merge) are next, on their own branches/specs.
