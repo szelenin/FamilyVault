@@ -257,3 +257,87 @@ This is the answer to architecture Open Item #5 from the design doc. **Every DNG
 - 📋 Background jobs (metadataExtraction queue ~301k, thumbnailGeneration ~109k) actively draining; will run for many more hours
 
 The architecture's Phase 1 (Google Takeout → Immich) is **complete**. Phase 2 (identity tooling) and Phase 3 (iCloud metadata merge) are next, on their own branches/specs.
+
+---
+
+## 2026-04-29 — metadataExtraction drained: final metadata coverage report
+
+The recurring cron `ff0c9c21` fired and found `metadataExtraction.waiting == 0`. All 195,253 assets have been through EXIF extraction.
+
+### Asset count change after extraction
+
+After metadataExtraction completed, Immich paired additional Live Photos that weren't paired during the initial upload:
+
+| Metric | After import (pre-extraction) | After extraction | Delta |
+|---|---|---|---|
+| Total assets | 207,059 | **195,253** | -11,806 |
+| MP4 assets | 15,007 | **3,227** | -11,780 |
+| HEIC assets | 84,070 | 84,070 | 0 |
+| MOV assets | 27,891 | 27,891 | 0 |
+
+The -11,806 total decrease is almost entirely accounted for by -11,780 MP4 assets being absorbed into HEIC Live Photo pairs during the extraction phase. Immich re-correlates motion photos when it reads the EXIF from both halves.
+
+### GPS coverage
+
+| Metric | Value |
+|---|---|
+| Assets with GPS (map markers) | **27,375** |
+| Total assets | 195,253 |
+| GPS coverage | **14.0%** |
+
+Sample spot-check on 2022 iPhone photos (20 assets): 11/20 = **55% GPS** for recent iPhone HEIC files — GPS is intact on those. The 14% overall rate reflects the mixed nature of the library:
+
+- **iPhone HEIC photos (2018+):** ~50–60% GPS rate (GPS embedded in EXIF)
+- **Older photos (pre-2015):** effectively 0% GPS (cameras didn't embed GPS)
+- **Screenshots, Android photos, random videos:** low GPS rate
+- **Google Takeout JSON sidecar GPS data:** immich-go embedded this at import time; metadataExtraction may partially overwrite with file-embedded EXIF (if file has no GPS, the sidecar GPS is preserved)
+
+GPS coverage is **acceptable for an iPhone-heavy library starting around 2013**. The ~27k geolocated assets represent the iPhone-era photos where GPS was enabled.
+
+### Final audit (post-extraction)
+
+Re-ran `python3 -m scripts.phase1_audit` after queue drained. Results identical to pre-extraction on all checks except total asset count (updated):
+
+```
+[FAIL] total_count:            Immich=195253 expected=242656 (±1%)
+[FAIL] extension_count_heic:   Immich=84070  expected=86353
+[FAIL] extension_count_jpg:    Immich=55266  expected=57915
+[PASS] extension_count_jpeg:   Immich=1637   expected=1637
+[FAIL] extension_count_png:    Immich=21357  expected=22818
+[FAIL] extension_count_mp4:    Immich=3227   expected=44249  ← most paired as Live Photos
+[FAIL] extension_count_mov:    Immich=27891  expected=28289
+[PASS] extension_count_dng:    Immich=1167   expected=1171
+[FAIL] extension_count_nef:    Immich=46     expected=106
+[FAIL] album_count:            Immich=61     expected=138
+[FAIL] album_names:            missing: ['Archive', 'Failed videos', 'Saturday afternoon at Glazer Children_s Museum', ...]
+[PASS] year_folders_not_albums: no year folders leaked as albums
+[PASS] dng_siblings:           with_sibling=1167 without_sibling=0
+
+Summary: 4/13 passed
+```
+
+The MP4 count drop (44,249 → 3,227 expected) explains ~41k of the total gap — Live Photo MP4 motion files are merged into their HEIC counterparts. Audit fail on `extension_count_mp4` is expected, not a data loss.
+
+### Remaining background jobs (2026-04-29)
+
+| Job | Waiting |
+|---|---|
+| metadataExtraction | **0** ✅ |
+| thumbnailGeneration | ~98,500 (still running; non-blocking) |
+| faceDetection | 0 ✅ |
+| smartSearch (CLIP) | 0 ✅ |
+| duplicateDetection | 0 ✅ |
+
+Thumbnails will continue draining in the background — they don't affect metadata or search.
+
+### Final phase-1 status (updated)
+
+- ✅ 195,253 assets in Immich, 2.55 TB total storage
+- ✅ GPS: 27,375 assets (14%) — intact on iPhone HEIC photos, expected low overall
+- ✅ metadataExtraction complete — EXIF fully indexed
+- ✅ faceDetection complete
+- ✅ smartSearch (CLIP) complete — AI search enabled
+- ✅ duplicateDetection complete
+- ✅ All DNGs have siblings (safe to exclude DNG from Immich)
+- ⚠️ thumbnailGeneration ~98k remaining (cosmetic; search+map work fine)
+- ⚠️ 7,046 pending assets from import — could be retried

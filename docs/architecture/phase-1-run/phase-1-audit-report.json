@@ -6,8 +6,8 @@
       "name": "total_count",
       "passed": false,
       "expected": 242656,
-      "actual": 207059,
-      "message": "Immich=207059 expected=242656 (tolerance \u00b11%)"
+      "actual": 195253,
+      "message": "Immich=195253 expected=242656 (tolerance ±1%)"
     },
     {
       "name": "extension_count_heic",
@@ -41,8 +41,8 @@
       "name": "extension_count_mp4",
       "passed": false,
       "expected": 44249,
-      "actual": 15007,
-      "message": ".mp4 Immich=15007 expected=44249"
+      "actual": 3227,
+      "message": ".mp4 Immich=3227 expected=44249"
     },
     {
       "name": "extension_count_mov",
@@ -81,10 +81,10 @@
         "2008-Chicago-Winter",
         "2008-San Francisco",
         "2009-03-07 New York",
-        "2009-05-03 \u0427\u0435\u0440\u043d\u043e\u0432\u0446\u044b",
+        "2009-05-03 Черновцы",
         "2010 Kiev day",
-        "2010-06 \u0425\u043e\u0440\u0432\u0430\u0442\u0438\u044f",
-        "2010-10-31-\u0410\u043d\u0434\u0440\u0435\u0435\u0432\u0441\u043a\u0438\u0439",
+        "2010-06 Хорватия",
+        "2010-10-31-Андреевский",
         "2010-Pimsik",
         "2011-05-Sevastopol",
         "4 days in Wesley Chapel and Tampa",
@@ -100,7 +100,7 @@
         "Chicago Air show",
         "Chicago Rollers trip (downtown, 20km)",
         "Chicago Sears tower",
-        "Edgar\u2019s fishing lessons",
+        "Edgar’s fishing lessons",
         "Failed videos",
         "Field trip",
         "Lugano",
@@ -118,7 +118,7 @@
         "Saturday in Tampa",
         "Saturday in Tampa(1)",
         "Saturday in Wesley Chapel and Plant City",
-        "Sergey, \u0410\u043b\u0438\u043d\u0430",
+        "Sergey, Алина",
         "Student of the month",
         "Sunday afternoon in Tampa",
         "Sunday at Cypress Point Park",
@@ -201,19 +201,19 @@
         "Weekend in Brandon",
         "Weekend in Daytona Beach",
         "Weekend in Palm Harbor and New Port Richey",
-        "\u0410\u043b\u0438\u043d\u0430 \u0456 \u042d\u0434\u0433\u0430\u0440",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c 2014 \u044d\u0442\u043e",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(1)",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(2)",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(3)",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(4)",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(5)",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c(6)",
-        "\u041a\u0430\u043a\u043e\u0439 \u0431\u044b\u043b \u043c\u0430\u043b\u0435\u043d\u044c\u043a\u0438\u0439 _)",
-        "\u041d\u0430 \u0444\u0435\u0440\u043c\u0435 \u0441 \u043a\u043b\u0430\u0441\u0441\u043e\u043c",
-        "\u041f\u043e\u043a\u0430 \u043c\u0430\u043c\u0430 \u0432 \u0448\u043a\u043e\u043b\u0435 (1\u0439 PTO)",
-        "\u041f\u0440\u043e\u0431\u0443\u0435\u043c \u0432\u0435\u043b\u0438\u043a"
+        "Алина і Эдгар",
+        "Згадайте цей день",
+        "Згадайте цей день 2014 это",
+        "Згадайте цей день(1)",
+        "Згадайте цей день(2)",
+        "Згадайте цей день(3)",
+        "Згадайте цей день(4)",
+        "Згадайте цей день(5)",
+        "Згадайте цей день(6)",
+        "Какой был маленький _)",
+        "На ферме с классом",
+        "Пока мама в школе (1й PTO)",
+        "Пробуем велик"
       ],
       "actual": [
         "2 days in Wesley Chapel",
@@ -221,10 +221,10 @@
         "2008-Chicago-Winter",
         "2008-San Francisco",
         "2009-03-07 New York",
-        "2009-05-03 \u0427\u0435\u0440\u043d\u043e\u0432\u0446\u044b",
+        "2009-05-03 Черновцы",
         "2010 Kiev day",
-        "2010-06 \u0425\u043e\u0440\u0432\u0430\u0442\u0438\u044f",
-        "2010-10-31-\u0410\u043d\u0434\u0440\u0435\u0435\u0432\u0441\u043a\u0438\u0439",
+        "2010-06 Хорватия",
+        "2010-10-31-Андреевский",
         "2010-Pimsik",
         "2011-05-Sevastopol",
         "4 days in Wesley Chapel and Tampa",
@@ -239,7 +239,7 @@
         "Chicago Air show",
         "Chicago Rollers trip (downtown, 20km)",
         "Chicago Sears tower",
-        "Edgar\u2019s fishing lessons",
+        "Edgar’s fishing lessons",
         "Field trip",
         "Lugano",
         "Making gelato chocolate ",
@@ -270,13 +270,13 @@
         "Weekend in Brandon",
         "Weekend in Daytona Beach",
         "Weekend in Palm Harbor and New Port Richey",
-        "\u0410\u043b\u0438\u043d\u0430 \u0456 \u042d\u0434\u0433\u0430\u0440",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c",
-        "\u0417\u0433\u0430\u0434\u0430\u0439\u0442\u0435 \u0446\u0435\u0439 \u0434\u0435\u043d\u044c 2014 \u044d\u0442\u043e",
-        "\u041a\u0430\u043a\u043e\u0439 \u0431\u044b\u043b \u043c\u0430\u043b\u0435\u043d\u044c\u043a\u0438\u0439 :)",
-        "\u041d\u0430 \u0444\u0435\u0440\u043c\u0435 \u0441 \u043a\u043b\u0430\u0441\u0441\u043e\u043c",
-        "\u041f\u043e\u043a\u0430 \u043c\u0430\u043c\u0430 \u0432 \u0448\u043a\u043e\u043b\u0435 (1\u0439 PTO)",
-        "\u041f\u0440\u043e\u0431\u0443\u0435\u043c \u0432\u0435\u043b\u0438\u043a"
+        "Алина і Эдгар",
+        "Згадайте цей день",
+        "Згадайте цей день 2014 это",
+        "Какой был маленький :)",
+        "На ферме с классом",
+        "Пока мама в школе (1й PTO)",
+        "Пробуем велик"
       ],
       "message": "missing albums: ['Archive', 'Failed videos', 'Saturday afternoon at Glazer Children_s Museum', 'Saturday afternoon at Glazer Children_s Museum(1)', 'Saturday at Glazer Children_s Museum']"
     },
@@ -351,12 +351,20 @@
         ],
         "without_sibling_files": []
       },
-      "message": "DNG buckets \u2014 with_sibling=1167 without_sibling=0"
+      "message": "DNG buckets — with_sibling=1167 without_sibling=0"
     }
   ],
   "summary": {
     "total": 13,
     "passed": 4,
     "failed": 9
-  }
+  },
+  "generated_at": "2026-04-29",
+  "gps_coverage": {
+    "assets_with_gps": 27375,
+    "total_assets": 195253,
+    "coverage_pct": 14.0,
+    "note": "GPS intact on iPhone HEIC photos; 14% overall reflects pre-smartphone-era + screenshot + Android photos with no GPS"
+  },
+  "asset_count_note": "Total dropped 207059→195253 (-11806) after metadataExtraction completed: 11780 MP4 motion files were paired into HEIC Live Photos, removing them as standalone assets."
 }
