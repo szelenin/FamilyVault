@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** ✅ Complete (2026-04-30) — 195,253 assets in Immich, all background jobs drained, audit report at `docs/architecture/phase-1-run/phase-1-audit-report.json`.
+
 **Goal:** Import the user's complete Google Takeout (49 photo-data zips + 1 metadata-HTML zip = 50 total, 2.4 TB, ~243k items) into a freshly-reset Immich instance with new storage layout (RAID = originals only; Mac Mini internal = everything else), then audit the result against the Takeout manifest.
 
 **Architecture:** Phase 0 resets Immich and migrates storage. Phase 1 runs `immich-go upload from-google-photos` once, against all 49 photo-data zips (the metadata-HTML zip is excluded by the `-3-*.zip` glob), with a parallel monitor. Phase 1.5 runs a Python audit package that compares Immich's actual state against `google-takeout-manifest.json` (the validation oracle).

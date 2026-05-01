@@ -1,7 +1,7 @@
 # Three-Source Merge Architecture
 
 **Date:** 2026-04-26
-**Status:** Design proposed, pending implementation
+**Status:** Phase 1 complete (2026-04-30); Phases 2–4 not yet started
 **Supersedes:** Earlier "iCloud as primary" architecture in `docs/plan.md`
 
 ## Why we are pivoting
@@ -161,11 +161,11 @@ After Phases 1-3 work and the Phase 1.5 mobile pilot has proven Immich mobile is
 
 These need investigation, not design decisions, before implementation.
 
-1. **Live Photos in Immich.** Does Immich pair HEIC + MOV automatically? Does Google Takeout preserve the MOV? If Immich does not pair them, iCloud osxphotos becomes the Live Photos byte source. Probe required during Phase 1.
+1. ~~**Live Photos in Immich.** Does Immich pair HEIC + MOV automatically? Does Google Takeout preserve the MOV? If Immich does not pair them, iCloud osxphotos becomes the Live Photos byte source. Probe required during Phase 1.~~ **RESOLVED (Phase 1, 2026-04-30):** Immich pairs HEIC + MP4 motion photos automatically during metadataExtraction. After the queue drained, ~41k MP4 assets were absorbed into their HEIC Live Photo counterparts (total dropped 207k → 195k). Google Takeout does preserve the MOV/MP4 component. No iCloud byte source needed for Live Photos.
 2. **immich-go vs alternatives.** Is immich-go's dedup robust? Does it handle Google Takeout's broken sidecars? Spike: import 100 photos from one zip and verify GPS, tags, datetime survive.
 3. **Merge cadence.** Daily 2 AM cron? Continuous? Affects how much delta there is per run.
 4. **Two Google accounts.** The user has accounts 1 and 2 in `/Volumes/HomeRAID/google-takeout/`. Phase 1 starts with account 1; account 2 import is a Phase 1 follow-up.
 5. **iCloud-only photos (in iCloud, not in Google Takeout).** Phase 3 metadata merge reads `Photos.sqlite` and matches against Immich assets via Strategy D. Any iCloud row that has no Immich match has nowhere to apply its metadata. Two options for Phase 3 design:
    - **Skip:** the photo is not in Immich, so wife's tagging of it is lost.
    - **Selective byte import:** when an iCloud row has no Immich match, import the original bytes from the iCloud filesystem into Immich as a managed asset (not as External Library). This preserves wife's curation but means Immich grows by the iCloud-only count. Recommended.
-6. **Live Photos byte source.** If Immich does not pair HEIC + MOV from Google Takeout, the MOV component is lost. Possible fix: selectively import the MOV from the iCloud filesystem (osxphotos-exported) for any photo where the Google import lost it. Decision deferred to Phase 1 research probe.
+6. ~~**Live Photos byte source.** If Immich does not pair HEIC + MOV from Google Takeout, the MOV component is lost. Possible fix: selectively import the MOV from the iCloud filesystem (osxphotos-exported) for any photo where the Google import lost it. Decision deferred to Phase 1 research probe.~~ **RESOLVED:** See item 1. Pairing works; no action needed.
