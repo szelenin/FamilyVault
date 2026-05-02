@@ -15,9 +15,11 @@ services:
       REDIS_HOSTNAME: redis
       UPLOAD_LOCATION: ${UPLOAD_LOCATION}
       MACHINE_LEARNING_URL: http://immich-machine-learning:3003
+    ports:
+      - "2283:2283"
     volumes:
-      - /Volumes/HomeRAID/immich/upload:${UPLOAD_LOCATION}
-      - /Volumes/HomeRAID/icloud-export:/usr/src/app/icloud-export:ro
+      - /Users/szelenin/immich-data/upload:${UPLOAD_LOCATION}
+      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/upload
 
   immich-microservices:
     image: ghcr.io/immich-app/immich-server:v2.6.3
@@ -35,14 +37,14 @@ services:
       UPLOAD_LOCATION: ${UPLOAD_LOCATION}
       MACHINE_LEARNING_URL: http://immich-machine-learning:3003
     volumes:
-      - /Volumes/HomeRAID/immich/upload:${UPLOAD_LOCATION}
-      - /Volumes/HomeRAID/icloud-export:/usr/src/app/icloud-export:ro
+      - /Users/szelenin/immich-data/upload:${UPLOAD_LOCATION}
+      - /Volumes/HomeRAID/immich-library:${UPLOAD_LOCATION}/upload
 
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:v2.6.3
     restart: unless-stopped
     volumes:
-      - /Volumes/HomeRAID/immich/model-cache:/cache
+      - /Users/szelenin/immich-data/model-cache:/cache
 
   redis:
     image: redis:6.2-alpine
@@ -56,4 +58,4 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_DATABASE_NAME}
     volumes:
-      - /Volumes/HomeRAID/immich/postgres:/var/lib/postgresql/data
+      - /Users/szelenin/immich-data/postgres:/var/lib/postgresql/data
