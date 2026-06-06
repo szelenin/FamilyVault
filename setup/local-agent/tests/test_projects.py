@@ -17,3 +17,20 @@ def test_create_and_get_project():
     assert got["title"] == "Miami Trip"
     assert got["state"] == "searching"
     assert got["timeline"] == []
+
+
+def test_set_timeline_builds_positions():
+    created = projects.create_project(title="T", request="r")
+    pid = created["project_id"]
+    result = projects.set_timeline(pid, ["a1", "a2", "a3"])
+    tl = result["timeline"]
+    assert [i["position"] for i in tl] == [1, 2, 3]
+    assert [i["asset_id"] for i in tl] == ["a1", "a2", "a3"]
+    # persisted
+    assert projects.get_project(pid)["timeline"] == tl
+
+
+def test_set_timeline_returns_count():
+    created = projects.create_project(title="T2", request="r")
+    result = projects.set_timeline(created["project_id"], ["a1"])
+    assert result["count"] == 1

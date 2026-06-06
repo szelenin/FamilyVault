@@ -31,3 +31,18 @@ def get_project(project_id: str) -> dict:
         project_id: The project id returned by create_project.
     """
     return _show_project(project_id)
+
+
+def set_timeline(project_id: str, asset_ids: list) -> dict:
+    """Replace the project's timeline with an ordered list of assets.
+
+    Args:
+        project_id: The project id.
+        asset_ids: Asset ids in the desired display order.
+
+    Returns:
+        {"timeline": [{"position": int, "asset_id": str}, ...], "count": int}
+    """
+    items = [{"position": i, "asset_id": aid} for i, aid in enumerate(asset_ids, 1)]
+    p = _set_timeline(project_id, items)
+    return {"timeline": p["timeline"], "count": len(p["timeline"])}
