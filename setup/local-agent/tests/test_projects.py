@@ -34,3 +34,17 @@ def test_set_timeline_returns_count():
     created = projects.create_project(title="T2", request="r")
     result = projects.set_timeline(created["project_id"], ["a1"])
     assert result["count"] == 1
+
+
+def test_list_projects_empty():
+    assert projects.list_projects() == []
+
+
+def test_list_projects_returns_summaries():
+    a = projects.create_project(title="Alpha", request="r1")
+    b = projects.create_project(title="Beta", request="r2")
+    listed = projects.list_projects()
+    ids = {p["id"] for p in listed}
+    assert {a["project_id"], b["project_id"]} <= ids
+    for p in listed:
+        assert set(p.keys()) == {"id", "title", "state"}

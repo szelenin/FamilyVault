@@ -46,3 +46,23 @@ def set_timeline(project_id: str, asset_ids: list) -> dict:
     items = [{"position": i, "asset_id": aid} for i, aid in enumerate(asset_ids, 1)]
     p = _set_timeline(project_id, items)
     return {"timeline": p["timeline"], "count": len(p["timeline"])}
+
+
+def list_projects() -> list:
+    """List existing projects.
+
+    Returns:
+        List of {"id": str, "title": str, "state": str}, sorted by id.
+    """
+    stories_dir = os.environ.get("STORIES_DIR") or default_stories_dir()
+    if not os.path.isdir(stories_dir):
+        return []
+    out = []
+    for entry in sorted(os.listdir(stories_dir)):
+        path = os.path.join(stories_dir, entry, "project.json")
+        if not os.path.exists(path):
+            continue
+        with open(path) as f:
+            p = json.load(f)
+        out.append({"id": p.get("id"), "title": p.get("title"), "state": p.get("state")})
+    return out
