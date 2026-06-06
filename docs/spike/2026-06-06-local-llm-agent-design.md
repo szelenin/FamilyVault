@@ -66,26 +66,29 @@ Everything else — Immich, the `setup/story-engine/` scripts, `project.json`, F
 
 ---
 
+## Baseline: v2 project model
+
+**The v2 `manage_project.py` module is the baseline.** v1 (`manage_scenario.py`, `scenario.json`, `items` field, `draft→approved` states) is deprecated and out of scope. v2 uses `project.json` with a `timeline` field and importable Python functions — no subprocess needed for project management.
+
+Reality check found in the code: v2 `manage_project.py` exists and works for project management, but the **video assembler (`assemble_video.py`) is still wired to v1** and its v2 path (`build_ffmpeg_cmd_v2`) was started but never connected. Rather than finish that migration now, **Phase 1 defers video assembly entirely** (see Scope below).
+
 ## Tools (the agent's capabilities)
 
-Minimal set — local models degrade with large tool sets. Covers the full story workflow:
+Minimal set — local models degrade with large tool sets. Phase 1 covers search → create project → build timeline. The user reviews the result in the existing Selection UI. All tools call importable functions from the existing scripts directly.
 
-| Tool | What it does | Wraps |
+| Tool | What it does | Backed by |
 |---|---|---|
-| `search_photos` | Search Immich by query, person, date, location | `search_photos.py` |
-| `list_projects` | List existing projects | `manage_scenario.py list` |
-| `create_project` | Create a project, returns `project_id` | `manage_scenario.py create` |
-| `get_project` | Read project state (timeline, narrative, status) | `manage_scenario.py show` |
-| `set_timeline` | Replace the full ordered scene list in one call | `manage_scenario.py add/remove/reorder` |
-| `set_narrative` | Set the story narrative text | `manage_scenario.py set-narrative` |
-| `assemble_video` | Trigger FFmpeg assembly, return output path | `assemble_video.py` |
+| `search_photos` | Search Immich by query, person, date, location | `search_photos.py::search_photos()` |
+| `list_projects` | List existing projects (id, title, state) | new helper (no v2 list fn exists) |
+| `create_project` | Create a project, returns `project_id` | `manage_project.py::create_project()` |
+| `get_project` | Read project state (timeline, scenes, status) | `manage_project.py::show_project()` |
+| `set_timeline` | Replace the full ordered timeline in one call | `manage_project.py::set_timeline()` |
 
 Design notes:
-- `set_timeline` takes the **full ordered list** rather than incremental add/remove/reorder ops — simpler for the model (build the list it wants, set it; no index tracking across calls).
+- `set_timeline` takes the **full ordered list** rather than incremental add/remove/reorder ops — simpler for the model (build the list it wants, set it; no index tracking across calls). Timeline item shape: `{"position": int, "asset_id": str}` (videos may add trim `start`/`end`).
 - `search_photos` returns a **compact** record (asset id, date, location, people, thumbnail URL) — keeps the context window lean.
-- `assemble_video` is blocking with streamed progress (~30–60s for a 2-min video).
 
-**Intentionally excluded for now:** photo scoring, burst dedup, scene detection. These currently live in Claude's reasoning. Phase 1 simplifies to search → pick → assemble. Scoring can be reintroduced once the basic loop works.
+**Intentionally excluded from Phase 1:** video assembly (deferred), narrative/per-scene stories (v2 has no top-level narrative field), photo scoring, burst dedup, scene detection. Phase 1 proves the agent loop + tool calling against the real library; capabilities layer on after.
 
 ---
 
@@ -101,8 +104,7 @@ setup/local-agent/
 ├── tools/                    # ← shared core (Phase 1 AND 1b)
 │   ├── __init__.py
 │   ├── photos.py             # search_photos
-│   ├── projects.py           # list/create/get_project, set_timeline, set_narrative
-│   └── video.py              # assemble_video
+│   └── projects.py           # list/create/get_project, set_timeline
 ├── server.py                 # Phase 1: MCP server — registers tools/ for Goose
 ├── agent.py                  # Phase 1b: custom loop — imports tools/ directly
 └── tests/
@@ -144,9 +146,9 @@ Then a **go/no-go smoke test** (standalone script, ~5 min): send a prompt with o
 | Step | What | Depends on |
 |---|---|---|
 | 0 | Install Ollama + qwen3:14b + smoke test (go/no-go) | Mac Mini |
-| 1 | Build `tools/` (7 functions) + unit tests | Step 0 |
+| 1 | Build `tools/` (5 functions) + unit tests | Step 0 |
 | 2 | `server.py` MCP wrapper + connect Goose | Step 1 |
-| 3 | End-to-end: create a real story through Goose | Step 2 |
+| 3 | End-to-end: agent searches → creates project → builds timeline; verify `project.json` | Step 2 |
 | 4 | **Phase 1b:** `agent.py` custom loop over same tools | Step 3 |
 
 ---
@@ -174,6 +176,12 @@ Built on the OpenAI Python SDK pointed at Ollama's OpenAI-compatible endpoint (`
 
 ## Out of Scope (Phase 1)
 
+- **Video assembly** — deferred. The v2 assembler migration (`build_ffmpeg_cmd_v2`) is unfinished; a later phase wires it up, drops the `approved` gate (generate anytime), and adds a draft/full quality switch.
 - The novel AI-directed UI (voice, dynamic tool activation, live state) — future spec.
 - Cloud productization & agent sandboxing (e.g. patterns from NemoClaw) — Phase 3+ if pursued.
-- Photo scoring / burst dedup / scene detection — reintroduce after the basic loop works.
+- Narrative / per-scene stories, photo scoring, burst dedup, scene detection — reintroduce after the basic loop works.
+- v1 (`manage_scenario.py`) — deprecated; not used by the agent.
+
+## Related doc updates
+
+- `setup/story-engine/README.md` still documents the v1 `manage_scenario.py` CLI as current. It should be updated to reflect the v2 `manage_project.py` model. Tracked as a task in the implementation plan.
