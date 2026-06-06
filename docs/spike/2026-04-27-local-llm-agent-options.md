@@ -4,7 +4,7 @@
 **Branch:** `015-local-llm-spike`  
 **Context:** FamilyVault currently uses Claude Code + Claude API as the AI orchestrator. This spike evaluates 4 approaches for replacing or augmenting that with a locally hosted LLM — motivated by learning-by-doing, with a potential future product path.
 
-**Target hardware:** Mac Mini (Apple Silicon M-series, 16GB RAM assumed)  
+**Target hardware:** Mac Mini — Apple M4, 24GB RAM (verified 2026-06-06)  
 **Existing stack:** Python 3.13, TypeScript/SvelteKit, FFmpeg, Immich REST API, `project.json` shared state
 
 ---
@@ -20,6 +20,8 @@
 | `llama3.3:70b` | ~40 GB | Excellent | Needs 64GB+ Mac |
 
 Ollama gained MLX backend support (Apple Silicon) in late 2025 — up to 93% faster decode. Use `ollama pull qwen3:14b` to get started.
+
+**Verified hardware:** The Mac Mini is an Apple M4 with 24GB RAM (not the 16GB originally assumed). This is comfortable for `qwen3:14b` (~9GB) even with Immich running, and makes `qwen2.5:32b` (~20GB) a viable stretch option for higher quality when Immich is idle.
 
 ---
 
