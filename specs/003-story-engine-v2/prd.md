@@ -304,6 +304,29 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 **Depends on**: IMP-007 (Screen 1 must be working first — DONE).
 
+### IMP-015: Local LLM Agent (Self-Hosted AI Orchestrator)
+
+**Problem**: Today the AI orchestrator is Claude Code + Claude API. Every request that searches photos, builds a timeline, or drives the pipeline depends on the cloud. Goal: a locally hosted LLM that runs the agent loop on the Mac Mini — for learning how agents work end-to-end, privacy (photos/captions never leave the network), and a possible future productization path.
+
+**Approach**: D→A from the spike (`docs/spike/2026-04-27-local-llm-agent-options.md`). Build the tool logic once; run it first under an existing agent (Goose), then under a custom Python loop. The custom loop is the long-term direction (consistent with the "AI as orchestrator" philosophy); Goose is a fast validation runtime.
+
+**Design**: `docs/spike/2026-06-06-local-llm-agent-design.md`. Plan: `docs/superpowers/plans/2026-06-06-local-llm-agent-phase1.md`. Code: `setup/local-agent/`.
+
+**Done (Phase 1 + Phase 1b)**:
+- R079: Ollama + `qwen3:14b` on the Mac Mini (Apple M4, 24GB). Tool-calling smoke test passed. (See `setup/local-agent/SETUP-NOTES.md` for the formula+cask runner workaround and `python3.13` requirement.)
+- R080: Five agent tools wrapping the v2 engine — `search_photos`, `list_projects`, `create_project`, `get_project`, `set_timeline`. Shared `tools/` core. 14 unit tests.
+- R081: MCP server (`server.py`, FastMCP) exposing the 5 tools — ready for any MCP client.
+- R082: Custom tool-calling loop (`agent.py`) over Ollama's OpenAI-compatible endpoint. **Validated end-to-end**: a natural-language request searched the real Immich library, created a project, and wrote a positioned timeline to `project.json` — fully local.
+
+**Next (parked / not yet implemented)**:
+- R083: **Goose runtime (parked — next improvement)**. Install Goose, register `server.py` as a stdio MCP extension, validate the same workflow through Goose + Ollama as an alternate runtime. Plan Task 7. Parked because the custom loop (the end goal) already works; revisit for comparison/learning.
+- R084: `think=false` tuning for qwen3 — suppress thinking-mode output to cut per-turn latency (~10s warm) and clean tool-call formatting.
+- R085: Video assembly via the agent — deferred. Requires finishing the v2 assembler wiring (note: IMP-012 is marked done but `assemble_video.py` still routes through the v1 `manage_scenario` path; `build_ffmpeg_cmd_v2` exists but is unused). Add an `assemble_video` tool once the v2 path is live; drop the `approved` gate (generate anytime) and add a draft/full quality switch.
+- R086: Reintroduce richer capabilities the agent currently omits — narrative/per-scene stories, photo scoring, burst dedup — once the basic loop is proven in daily use.
+- R087: Context management in the loop — truncate/summarize old turns as sessions grow (currently relies on compact records + short sessions).
+
+**Priority**: MEDIUM — independent track from the story-engine pipeline. Phase 1 complete; remaining items are enhancements.
+
 ---
 
 ## Implementation Order (recommended)
@@ -322,6 +345,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 8 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
 | 9 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
 | 10 | **IMP-005**: Music & Audio | Deferred | Polish layer |
+| — | **IMP-015**: Local LLM Agent | Phase 1 DONE; Goose parked | Independent track. Custom loop works e2e; Goose (R083) is next improvement |
 
 **Notes**:
 - IMP-009 (Screenshot filter) is a quick win — spec and implement first.
