@@ -1,0 +1,10 @@
+[project]
+name = "familyvault-local-agent"
+version = "0.1.0"
+description = "Local-LLM agent for FamilyVault (Phase 1)"
+requires-python = ">=3.13"
+dependencies = ["openai>=1.0", "mcp>=1.0", "requests>=2.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

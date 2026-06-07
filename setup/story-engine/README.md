@@ -77,7 +77,11 @@ python3 setup/story-engine/scripts/search_photos.py \
 
 Options: `--query`, `--person`, `--after`, `--before`, `--city`, `--country`, `--type IMAGE|VIDEO`, `--limit N`, `--format json|ids`
 
-### Manage scenarios
+### Manage scenarios — Legacy (v1)
+
+> **Deprecated.** `manage_scenario.py` and the `scenario.json` / `items` format are **v1**. The current model is **v2** `manage_project.py`, which uses `project.json` with a `timeline` field and the state machine `searching → selecting → previewing → approved → generated`. v2 project management is driven programmatically (importable functions: `create_project`, `show_project`, `set_timeline`, …), by the Selection UI, and by the local agent (`setup/local-agent/`).
+>
+> Note: video assembly (`assemble_video.py`) still routes through the v1 path; finishing the v2 assembler wiring is tracked in the PRD (IMP-012 / IMP-015 R085). The v1 CLI below is retained for reference only.
 
 ```bash
 # Create

@@ -1,4 +1,10 @@
-# Story Engine v2 — Product Requirements Document
+# FamilyVault — Product Requirements Document
+
+> **Single source of truth for requirements.** This PRD spans the whole product (story engine, local agent, sync, etc.), not a single feature. Each improvement (IMP-NNN) and requirement (R-NNN) lives here; individual `specs/NNN-*/` folders implement a subset of these requirements as features/user stories. If a requirement is missing, add it here first.
+>
+> **"Done" means verified.** An item is only marked DONE when it has been implemented **and** verified to work end-to-end. Code that exists but is unwired, untested, or unverified is **not** done — record it as "Partial" with an explicit list of what remains to implement/verify.
+>
+> Historical note: this document began as the Story Engine v2 PRD (`specs/003-story-engine-v2/prd.md`) and was promoted to the project-wide PRD at `docs/PRD.md`.
 
 ## Context
 
@@ -234,22 +240,52 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
-### IMP-012: Assembler Refactor (v2 pipeline)
+### IMP-012: Assembler v2 — Project Model + FFmpeg Command Builder
 
-**Problem**: The video assembler (`assemble_video.py`) still uses the v1 `scenario.json` format and `manage_scenario.py`. It doesn't support: (a) the v2 `project.json` format, (b) video clips in the timeline (treats everything as still images), (c) DNG/RAW files (sips conversion produces corrupt TIFF). This requires a manual bridge (create v1 scenario from v2 project) and excludes all videos and DNG files from the output.
+**Problem**: The v1 assembler used `scenario.json` / flat `items`, treated everything as still images, had no video-clip support, and did lossy HEIC→JPEG conversion. A v2 data model and a v2 FFmpeg command builder were needed as the foundation for higher-quality, video-aware output.
 
-**Evidence**: Miami trip generation failed — 15 DNG files couldn't be decoded by FFmpeg ("Tiled TIFF not allowed"), 7 videos were treated as photos (loop filter on first frame only).
+**Scope (this feature)**: the **library-level** v2 building blocks — the project data model and the FFmpeg command/filter construction — independently unit-tested. (Wiring these into the runtime entry point and verifying end-to-end video generation is a separate feature: see **IMP-016**.)
 
 **Requirements**:
-- R060: Assembler MUST read from `project.json` (v2 format) directly, not `scenario.json`.
-- R061: Assembler MUST handle VIDEO timeline items — download original video, apply trim_start/trim_end, include with original audio. Photo-to-video and video-to-photo crossfade transitions.
-- R062: Assembler MUST handle DNG/RAW files — convert to JPEG via `sips` with explicit output format, or use ImageMagick as fallback.
-- R063: Remove dependency on `manage_scenario.py` — the v1 scenario system is deprecated.
-- R064: Each timeline item's `type` field (IMAGE/VIDEO) determines how FFmpeg processes it — no more treating everything as still images.
-- R065: Auto-detect dominant photo orientation (portrait vs landscape) and set video output orientation accordingly. If most photos are portrait → output portrait video (1080×1920) for phone viewing. If mixed → ask user.
-- R066: NEVER crop photos. Preserve the full original content of every photo. The user must see everything that was in the original photo — no edges cut off. Clarifying questions about aspect ratio handling to be asked during spec phase.
+- R060: v2 project file model (`manage_project.py`) — `create_project`, `show_project`, `set_state` (searching→selecting→previewing→approved→generated), `set_candidate_pool`, `set_timeline`, `swap_item`, `remove_item`, `reorder_items`, `trim_video`, `set_budget`, `set_discovery`, `set_scene_confirmation`, `set_assembly_config`.
+- R061: v2 FFmpeg command/filter builder (`build_ffmpeg_cmd_v2` + `build_filter_complex`) — reads `assembly_config` (resolution, CRF 18), branches per-item `type` (IMAGE/VIDEO), applies `trim_start`/`trim_end` for VIDEO items, mixes audio (background music + video-clip audio), 30 fps, 192 kbps AAC.
 
-**Priority**: HIGH — blocks video generation with the new v2 pipeline.
+**Status**: ✅ **DONE (009).** Both pieces implemented and unit-tested: `tests/story-engine/unit/test_project_file.py` (project model, all state/timeline/config functions) and `tests/story-engine/unit/test_assembly.py` (v2 command builder, video-clip filter, CRF/fps/bitrate). Scoped to the library layer; verified by unit tests.
+
+**Not in this feature (moved to IMP-016)**: wiring the v2 builder into `main()`/`assemble()`, downloading originals (incl. video + DNG) at runtime, DNG/RAW conversion, removing the v1 `manage_scenario` dependency, runtime orientation/no-crop, and an end-to-end test that produces a playable MP4 from a v2 `project.json`.
+
+---
+
+### IMP-016: Assembler v2 — Runtime Wiring & End-to-End Generation
+
+**Problem**: IMP-012 delivered the v2 project model and the v2 FFmpeg command builder, but nothing calls the builder in the runtime path — `main()` → `assemble()` still imports v1 `manage_scenario`, reads `scenario.json`'s `items`, and calls the v1 `build_ffmpeg_cmd`. `build_ffmpeg_cmd_v2` is currently dead code. There is no verified path from a v2 `project.json` to a playable `output.mp4`.
+
+**Evidence**: Earlier Miami-trip generation failed — 15 DNG files couldn't be decoded by FFmpeg ("Tiled TIFF not allowed"), 7 videos were treated as photos (loop filter on first frame only).
+
+**Requirements**:
+- R088: v2 runtime path — `main()`/`assemble()` loads `project.json`, reads `timeline`, and calls `build_ffmpeg_cmd_v2`. No v1 `scenario.json`.
+- R089: Download originals for timeline items including VIDEO (apply trim, keep original audio) and feed the v2 builder's audio mixing.
+- R090: DNG/RAW conversion at runtime — `sips` with explicit output format, or ImageMagick fallback (fix "Tiled TIFF not allowed").
+- R091: Remove the `manage_scenario.py` (v1) dependency from the assembler.
+- R092: Apply orientation auto-detect (dominant portrait/landscape → output resolution) and the no-crop rule at runtime.
+- R093: **End-to-end verification** — a passing test that generates a playable MP4 from a v2 `project.json` containing mixed IMAGE + VIDEO + DNG items.
+
+**Priority**: HIGH — blocks v2 video generation and the local agent's `assemble_video` tool (IMP-015 R085).
+
+---
+
+### IMP-017: Local Agent — Goose Runtime
+
+**Problem**: The local agent (IMP-015) runs through a custom Python loop. Goose is a production-grade, MCP-native agent runtime that can drive the same `server.py` tools — valuable as an alternate runtime for comparison and learning, and as a quicker on-ramp for new tools.
+
+**Requirements**:
+- R094: Install Goose on the Mac Mini and configure the Ollama provider (`qwen3:14b`).
+- R095: Register `setup/local-agent/server.py` as a stdio MCP extension in Goose (`~/.config/goose/config.yaml`).
+- R096: Validate the same workflow (search → create project → set timeline) through Goose + Ollama, and compare behavior/quality against the custom loop.
+
+**Status**: Parked / next. Steps are ready in the Phase 1 plan (Task 7): `docs/superpowers/plans/2026-06-06-local-llm-agent-phase1.md`.
+
+**Priority**: LOW — the custom loop (the end-goal runtime) already works end-to-end; this is an alternate runtime.
 
 ---
 
@@ -304,6 +340,29 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 **Depends on**: IMP-007 (Screen 1 must be working first — DONE).
 
+### IMP-015: Local LLM Agent (Self-Hosted AI Orchestrator)
+
+**Problem**: Today the AI orchestrator is Claude Code + Claude API. Every request that searches photos, builds a timeline, or drives the pipeline depends on the cloud. Goal: a locally hosted LLM that runs the agent loop on the Mac Mini — for learning how agents work end-to-end, privacy (photos/captions never leave the network), and a possible future productization path.
+
+**Approach**: D→A from the spike (`docs/spike/2026-04-27-local-llm-agent-options.md`). Build the tool logic once; run it first under an existing agent (Goose), then under a custom Python loop. The custom loop is the long-term direction (consistent with the "AI as orchestrator" philosophy); Goose is a fast validation runtime.
+
+**Design**: `docs/spike/2026-06-06-local-llm-agent-design.md`. Plan: `docs/superpowers/plans/2026-06-06-local-llm-agent-phase1.md`. Code: `setup/local-agent/`.
+
+**Done (Phase 1 + Phase 1b)**:
+- R079: Ollama + `qwen3:14b` on the Mac Mini (Apple M4, 24GB). Tool-calling smoke test passed. (See `setup/local-agent/SETUP-NOTES.md` for the formula+cask runner workaround and `python3.13` requirement.)
+- R080: Five agent tools wrapping the v2 engine — `search_photos`, `list_projects`, `create_project`, `get_project`, `set_timeline`. Shared `tools/` core. 14 unit tests.
+- R081: MCP server (`server.py`, FastMCP) exposing the 5 tools — ready for any MCP client.
+- R082: Custom tool-calling loop (`agent.py`) over Ollama's OpenAI-compatible endpoint. **Validated end-to-end**: a natural-language request searched the real Immich library, created a project, and wrote a positioned timeline to `project.json` — fully local.
+
+**Next (parked / not yet implemented)**:
+- R083: **Goose runtime — extracted to its own feature, IMP-017** (parked / next). See IMP-017 for requirements.
+- R084: `think=false` tuning for qwen3 — suppress thinking-mode output to cut per-turn latency (~10s warm) and clean tool-call formatting.
+- R085: Video assembly via the agent — deferred. Blocked on **IMP-016** (v2 assembler runtime wiring + e2e). Add an `assemble_video` tool once IMP-016 lands; drop the `approved` gate (generate anytime) and add a draft/full quality switch.
+- R086: Reintroduce richer capabilities the agent currently omits — narrative/per-scene stories, photo scoring, burst dedup — once the basic loop is proven in daily use.
+- R087: Context management in the loop — truncate/summarize old turns as sessions grow (currently relies on compact records + short sessions).
+
+**Priority**: MEDIUM — independent track from the story-engine pipeline. Phase 1 complete; remaining items are enhancements.
+
 ---
 
 ## Implementation Order (recommended)
@@ -314,7 +373,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | DONE (006) | Quick fix, high impact |
 | 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery, AI-driven budget |
-| 5 | **IMP-012**: Assembler Refactor | DONE (009) | v2 project.json, video clips, DNG, orientation, audio sync |
+| 5 | **IMP-012**: Assembler v2 — Model + Cmd Builder | DONE (009) | v2 project model + FFmpeg command builder, unit-tested (library layer) |
 | 6 | **IMP-007**: Selection UI (Screen 1) | DONE (010) | SvelteKit PWA, scene browsing, photo grid, select/deselect |
 | 6 | **IMP-011**: osxphotos Export Fix | Not started | HIGH — GPS recovery + ProRAW HEIC export + orientation fix |
 | 7 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. |
@@ -322,6 +381,9 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 8 | **IMP-002**: Visual Preview | Partial (album works) | Remaining: inline thumbnails on desktop |
 | 9 | **IMP-004**: Project File | Absorbed into IMP-007 | Timeline editor features |
 | 10 | **IMP-005**: Music & Audio | Deferred | Polish layer |
+| — | **IMP-015**: Local LLM Agent | Phase 1 DONE | Independent track. Custom loop works e2e |
+| — | **IMP-016**: Assembler v2 — Runtime Wiring & E2E | Not started | HIGH — wire v2 builder into runtime; verify MP4 from v2 project.json. Unblocks IMP-015 R085 |
+| — | **IMP-017**: Local Agent — Goose Runtime | Parked / next | LOW — alternate runtime; custom loop already works |
 
 **Notes**:
 - IMP-009 (Screenshot filter) is a quick win — spec and implement first.
