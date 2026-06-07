@@ -15,12 +15,16 @@ This design covers **Phase 1** only. The novel AI-directed UI (voice, dynamic to
 
 ## Chosen Approach: D → A
 
-From the options spike, the path is **Goose first, then a custom loop**:
+The options spike proposed **Goose first, then a custom loop** (D→A):
 
-- **Phase 1 (Goose):** Wrap FamilyVault's existing scripts as tools, expose them via an MCP server, drive them with [Goose](https://github.com/block/goose) + Ollama. Fastest path to a working agent; validates local-model quality with minimal new code.
-- **Phase 1b (Custom loop):** Replace Goose with a ~80–150 line custom Python agent loop calling the **same tool functions** directly. Maximum learning and full control.
+- **Goose:** Wrap the existing scripts as tools, expose via an MCP server, drive with [Goose](https://github.com/block/goose) + Ollama. Fastest validation with minimal new code.
+- **Custom loop:** A ~50-line custom Python agent loop calling the **same tool functions** directly. Maximum learning and full control — the long-term direction.
 
-The reusable investment is the **tool logic** (the code that talks to Immich, FFmpeg, and `project.json`) — written once, called two ways.
+### What we actually built (2026-06-06)
+
+> **We went straight to the custom loop and skipped Goose.** During execution it became clear the custom loop (the end goal, "A") is our own code talking HTTP to Ollama — which we'd already proven works via the smoke test — and was lower-risk than installing Goose (the Ollama cask binary had shown exec-environment friction on this machine). The custom loop now works end-to-end. **Goose is parked as its own follow-up feature, PRD IMP-017.**
+
+The reusable investment is the **tool logic** (the code that talks to Immich and `project.json`) — written once. It's exposed two ways: as plain functions the custom loop calls directly (`agent.py` → `registry.py` → `tools/`), and over MCP (`server.py`) for when Goose is picked up later.
 
 ---
 
@@ -97,19 +101,23 @@ Design notes:
 All new code under `setup/local-agent/`, isolated from `setup/story-engine/` (which it wraps):
 
 ```
-setup/local-agent/
-├── README.md                 # setup + usage
-├── pyproject.toml            # deps: mcp, requests (reuses existing scripts)
-├── config.sh                 # OLLAMA_URL, MODEL; reuses story-engine config.sh
-├── tools/                    # ← shared core (Phase 1 AND 1b)
+setup/local-agent/            # (as built)
+├── README.md                 # quickstart + usage
+├── SETUP-NOTES.md            # machine gotchas (python3.13, Ollama runner fix)
+├── pyproject.toml            # deps: openai, mcp, requests
+├── config.sh                 # OLLAMA_URL/MODEL, IMMICH_*, STORIES_DIR
+├── tools/                    # ← shared core (used by both runtimes)
 │   ├── __init__.py
+│   ├── _engine.py            # import bridge to v2 story-engine scripts
 │   ├── photos.py             # search_photos
 │   └── projects.py           # list/create/get_project, set_timeline
-├── server.py                 # Phase 1: MCP server — registers tools/ for Goose
-├── agent.py                  # Phase 1b: custom loop — imports tools/ directly
-└── tests/
-    ├── test_tools.py         # unit tests per tool (mock Immich/subprocess)
-    └── test_agent.py         # Phase 1b loop tests
+├── registry.py               # tool registry + OpenAI schema gen (custom loop)
+├── agent.py                  # custom loop — imports tools/ directly  ← what we run
+├── server.py                 # MCP server (for Goose later — IMP-017)
+├── scripts/
+│   └── smoke_test.py         # go/no-go tool-calling test
+└── tests/                    # test_engine, test_photos, test_projects,
+                              # test_server, test_registry, test_agent (14 tests)
 ```
 
 **The shared-core pattern:** each `tools/` function is a plain Python function with type hints and a docstring:
@@ -143,13 +151,16 @@ ollama pull qwen3:14b
 
 Then a **go/no-go smoke test** (standalone script, ~5 min): send a prompt with one fake tool, confirm a correct `tool_calls` response, measure tokens/sec on real hardware. If reliable and usable → proceed. If not → adjust model (`qwen2.5:14b`, smaller quant) before building anything on top.
 
-| Step | What | Depends on |
+**As built** (Goose step skipped — see "What we actually built" above):
+
+| Step | What | Status |
 |---|---|---|
-| 0 | Install Ollama + qwen3:14b + smoke test (go/no-go) | Mac Mini |
-| 1 | Build `tools/` (5 functions) + unit tests | Step 0 |
-| 2 | `server.py` MCP wrapper + connect Goose | Step 1 |
-| 3 | End-to-end: agent searches → creates project → builds timeline; verify `project.json` | Step 2 |
-| 4 | **Phase 1b:** `agent.py` custom loop over same tools | Step 3 |
+| 0 | Install Ollama + qwen3:14b + smoke test (go/no-go) | ✅ passed |
+| 1 | Build `tools/` (5 functions) + unit tests | ✅ |
+| 2 | `server.py` MCP wrapper (for future Goose) | ✅ built, not connected |
+| 3 | `registry.py` + `agent.py` custom loop + tests | ✅ |
+| 4 | End-to-end via the custom loop: search → create project → build timeline; verified `project.json` on disk | ✅ |
+| — | Connect Goose to `server.py` | parked → IMP-017 |
 
 ---
 
