@@ -1,4 +1,10 @@
-# Story Engine v2 — Product Requirements Document
+# FamilyVault — Product Requirements Document
+
+> **Single source of truth for requirements.** This PRD spans the whole product (story engine, local agent, sync, etc.), not a single feature. Each improvement (IMP-NNN) and requirement (R-NNN) lives here; individual `specs/NNN-*/` folders implement a subset of these requirements as features/user stories. If a requirement is missing, add it here first.
+>
+> **"Done" means verified.** An item is only marked DONE when it has been implemented **and** verified to work end-to-end. Code that exists but is unwired, untested, or unverified is **not** done — record it as "Partial" with an explicit list of what remains to implement/verify.
+>
+> Historical note: this document began as the Story Engine v2 PRD (`specs/003-story-engine-v2/prd.md`) and was promoted to the project-wide PRD at `docs/PRD.md`.
 
 ## Context
 
@@ -249,7 +255,21 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 - R065: Auto-detect dominant photo orientation (portrait vs landscape) and set video output orientation accordingly. If most photos are portrait → output portrait video (1080×1920) for phone viewing. If mixed → ask user.
 - R066: NEVER crop photos. Preserve the full original content of every photo. The user must see everything that was in the original photo — no edges cut off. Clarifying questions about aspect ratio handling to be asked during spec phase.
 
-**Priority**: HIGH — blocks video generation with the new v2 pipeline.
+**Status**: ⚠️ **PARTIAL — not verified, not done.** Spec 009 added v2 assembly *helpers* but they were never wired into the runtime path, and end-to-end v2 generation has never been verified. (Previously marked "DONE (009)" — reverted to reflect reality per the "done = verified" rule.)
+
+**What exists (code present, unverified)**:
+- `build_ffmpeg_cmd_v2()` exists in `assemble_video.py` (reads `assembly_config`: resolution, crf).
+
+**What is NOT done (must implement / verify)**:
+- R060: `main()` → `assemble()` still imports v1 `manage_scenario`, reads `scenario.json`'s `items`, and calls the **v1** `build_ffmpeg_cmd` — `build_ffmpeg_cmd_v2` is dead code. Wire the v2 path and read `project.json` / `timeline`.
+- R061: VIDEO timeline items (trim, original audio, photo↔video crossfades) — unverified.
+- R062: DNG/RAW handling — unverified (original evidence shows failures).
+- R063: Remove `manage_scenario.py` dependency — still present.
+- R064: per-item `type` (IMAGE/VIDEO) branching — unverified.
+- R065/R066: orientation auto-detect, no-crop — unverified.
+- **Verification gap**: no passing end-to-end test generates a video from a v2 `project.json`.
+
+**Priority**: HIGH — blocks v2 video generation and the local agent's `assemble_video` tool (IMP-015 R085).
 
 ---
 
@@ -321,7 +341,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 **Next (parked / not yet implemented)**:
 - R083: **Goose runtime (parked — next improvement)**. Install Goose, register `server.py` as a stdio MCP extension, validate the same workflow through Goose + Ollama as an alternate runtime. Plan Task 7. Parked because the custom loop (the end goal) already works; revisit for comparison/learning.
 - R084: `think=false` tuning for qwen3 — suppress thinking-mode output to cut per-turn latency (~10s warm) and clean tool-call formatting.
-- R085: Video assembly via the agent — deferred. Requires finishing the v2 assembler wiring (note: IMP-012 is marked done but `assemble_video.py` still routes through the v1 `manage_scenario` path; `build_ffmpeg_cmd_v2` exists but is unused). Add an `assemble_video` tool once the v2 path is live; drop the `approved` gate (generate anytime) and add a draft/full quality switch.
+- R085: Video assembly via the agent — deferred. Blocked on IMP-012 (the v2 assembler is PARTIAL — `assemble_video.py` still routes through the v1 `manage_scenario` path; `build_ffmpeg_cmd_v2` exists but is unwired). Add an `assemble_video` tool once IMP-012's v2 path is live and verified; drop the `approved` gate (generate anytime) and add a draft/full quality switch.
 - R086: Reintroduce richer capabilities the agent currently omits — narrative/per-scene stories, photo scoring, burst dedup — once the basic loop is proven in daily use.
 - R087: Context management in the loop — truncate/summarize old turns as sessions grow (currently relies on compact records + short sessions).
 
@@ -337,7 +357,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | 2 | **IMP-003**: Video Quality | DONE (005) | CRF 18, sips 100 |
 | 3 | **IMP-009**: Screenshot & Garbage Filtering | DONE (006) | Quick fix, high impact |
 | 4 | **IMP-006**: Smart Scene Discovery | DONE (007, 008) | Two-phase pipeline, AI-first search, probe discovery, AI-driven budget |
-| 5 | **IMP-012**: Assembler Refactor | DONE (009) | v2 project.json, video clips, DNG, orientation, audio sync |
+| 5 | **IMP-012**: Assembler Refactor | ⚠️ PARTIAL (009) | v2 helpers exist but unwired/unverified — assembler still on v1 path. Not done. |
 | 6 | **IMP-007**: Selection UI (Screen 1) | DONE (010) | SvelteKit PWA, scene browsing, photo grid, select/deselect |
 | 6 | **IMP-011**: osxphotos Export Fix | Not started | HIGH — GPS recovery + ProRAW HEIC export + orientation fix |
 | 7 | **IMP-010**: iCloud Metadata Sync | Not started | Bridges iCloud curation (favorites, albums, tags) into Immich. Unlocks IMP-008. |
