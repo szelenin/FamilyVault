@@ -381,6 +381,8 @@ Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocat
 
 **Approach**: VLM captioning per the model spec — **Qwen3-VL 8B (Instruct)** default (~6 GB, Ollama), Qwen2.5-VL 7B / InternVL3 8B as A/B fallbacks. Combines two requested signals: keyframe captioning **and** OCR (the VLM reads text natively — no separate OCR model). **Identity stays with Immich** — the VLM describes "a boy"; Immich knows it's your son (resolve "who" via Immich person IDs; never re-identify with the VLM).
 
+**Technical design**: `docs/superpowers/specs/2026-06-13-imp-018-vlm-captioning-design.md` (photos→Ollama, video→MLX-VLM, SQLite hybrid index with caption embeddings; photos-first phasing; chunked low-mem batch).
+
 **Requirements**:
 - R097: Ingest-time VLM captioning — generate a rich natural-language description per photo and per sampled video keyframe. Store captions in the FamilyVault index keyed to the Immich asset ID.
 - R098: Video frame handling — sample frames from clips and aggregate per-frame results into a video-level caption/conclusion (the model spec's "video frame handling" pipeline logic; leverage Qwen3-VL text–timestamp alignment for "when" an event occurs).
