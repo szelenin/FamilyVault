@@ -4,6 +4,10 @@
 >
 > **"Done" means verified.** An item is only marked DONE when it has been implemented **and** verified to work end-to-end. Code that exists but is unwired, untested, or unverified is **not** done — record it as "Partial" with an explicit list of what remains to implement/verify.
 >
+> **Status legend:** ✅ DONE · ⚠️ PARTIAL · Not started · Parked. The **[Implementation Order](#implementation-order-recommended)** table at the bottom is the authoritative index/priority of all IMP items.
+>
+> **Related docs (not requirements):** `docs/story-engine.md` (product vision/concept), `docs/plan.md` (data-migration & ops plan), `docs/model-spec-intelligent-search.md` (model choices for the understanding layer). These inform the PRD but the requirements themselves live only here.
+>
 > Historical note: this document began as the Story Engine v2 PRD (`specs/003-story-engine-v2/prd.md`) and was promoted to the project-wide PRD at `docs/PRD.md`.
 
 ## Context
@@ -369,7 +373,7 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ## Understanding Layer — beyond what Immich extracts
 
-Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocation — **do not rebuild those**. The items below extract signals Immich does *not*. They split into two tracks: a **content-understanding** track (what is happening — VLM + audio, per `docs/model-spec-intelligent-search.md`) and a **quality** track (is this a good shot). Both follow the model spec's **ingest-vs-query split**: heavy models run at ingest (batch, per asset) and write to a FamilyVault index keyed to Immich asset/person IDs; queries hit the precomputed index. Target hardware: M4 Mac Mini (24 GB), models served via Ollama. Full rationale and model choices: `docs/model-spec-intelligent-search.md`.
+Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocation — **do not rebuild those**. The items below extract signals Immich does *not*. They split into two tracks: a **content-understanding** track (what is happening — VLM + audio, per `docs/model-spec-intelligent-search.md`) and a **quality** track (is this a good shot). Both follow the model spec's **ingest-vs-query split**: heavy models run at ingest (batch, per asset) and write to a FamilyVault index keyed to Immich asset/person IDs; queries hit the precomputed index. Target hardware: M4 Mac Mini (24 GB), models served via Ollama. **Future scaling** (not v1): an optional GPU box (e.g. RTX 3090/4090) for fast whole-library batch captioning and larger VLMs (Qwen3-VL 30B-A3B) — keep the Mini as always-on orchestrator, wake the GPU box only for heavy batch jobs (model spec §8). Full rationale and model choices: `docs/model-spec-intelligent-search.md`.
 
 ### IMP-018: VLM Captioning & Extraction (content)
 

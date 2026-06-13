@@ -1,5 +1,7 @@
 # FamilyVault — Full Migration Plan
 
+> **This is the data-migration & ops plan, not the product backlog.** For current product requirements and status, `docs/PRD.md` is the single source of truth.
+
 ## Context
 
 ~2TB of photos/videos exist on both iCloud and Google Photos. The goal is to download

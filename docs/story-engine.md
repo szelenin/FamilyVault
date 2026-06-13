@@ -1,5 +1,7 @@
 # FamilyVault Story Engine
 
+> **This is the product vision/concept doc, not the backlog.** For current requirements and status, `docs/PRD.md` is the single source of truth. If something here should be a tracked requirement, add it to the PRD.
+
 ## The Idea
 
 Your photo library contains thousands of moments — trips, birthdays, holidays, ordinary Tuesdays. The Story Engine turns those moments into narratives: written stories, highlight reels, and video clips — automatically, using AI.
