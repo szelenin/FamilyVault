@@ -301,6 +301,8 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 - R077: User can view hidden duplicates if they want to override the auto-selection.
 - R078: In the generated clip, never include two versions of the same photo.
 
+**Status**: PARTIAL. Burst grouping **by time** is implemented (`score_and_select.py::detect_bursts`, shots ≤5s apart). **Not done**: near-duplicate by visual similarity (R074 — `thumbhash` is fetched in `enrich_assets` but never compared by Hamming distance) and exact-duplicate by checksum (R073). Best-frame-within-burst selection pairs with IMP-022.
+
 **Priority**: MEDIUM — improves selection quality and reduces clutter. Not blocking but noticeable with 313 selected items.
 
 ---
@@ -365,6 +367,74 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 
 ---
 
+## Understanding Layer — beyond what Immich extracts
+
+Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocation — **do not rebuild those**. The items below extract signals Immich does *not*. They split into two tracks: a **content-understanding** track (what is happening — VLM + audio, per `docs/model-spec-intelligent-search.md`) and a **quality** track (is this a good shot). Both follow the model spec's **ingest-vs-query split**: heavy models run at ingest (batch, per asset) and write to a FamilyVault index keyed to Immich asset/person IDs; queries hit the precomputed index. Target hardware: M4 Mac Mini (24 GB), models served via Ollama. Full rationale and model choices: `docs/model-spec-intelligent-search.md`.
+
+### IMP-018: VLM Captioning & Extraction (content)
+
+**Problem**: CLIP gives shallow concept matches; it can't describe *what is happening* (activities, context, relationships) and can't read text in an image. This blocks queries like "videos where my son plays piano" and "the photo of the restaurant menu."
+
+**Approach**: VLM captioning per the model spec — **Qwen3-VL 8B (Instruct)** default (~6 GB, Ollama), Qwen2.5-VL 7B / InternVL3 8B as A/B fallbacks. Combines two requested signals: keyframe captioning **and** OCR (the VLM reads text natively — no separate OCR model). **Identity stays with Immich** — the VLM describes "a boy"; Immich knows it's your son (resolve "who" via Immich person IDs; never re-identify with the VLM).
+
+**Requirements**:
+- R097: Ingest-time VLM captioning — generate a rich natural-language description per photo and per sampled video keyframe. Store captions in the FamilyVault index keyed to the Immich asset ID.
+- R098: Video frame handling — sample frames from clips and aggregate per-frame results into a video-level caption/conclusion (the model spec's "video frame handling" pipeline logic; leverage Qwen3-VL text–timestamp alignment for "when" an event occurs).
+- R099: OCR — extract visible text (signs, menus, documents) as part of the VLM extraction pass; index it for search.
+- R100: Selective/scheduled execution — do not caption the whole library eagerly; caption on a schedule or on first query (heavy batch job, slow-OK at ingest).
+- R101: Captions/OCR feed search and (optionally) replace hallucinated captions in timeline output.
+
+**Priority**: HIGH (v1 of the understanding layer per the model spec). Independent track.
+
+### IMP-019: Audio Understanding — Speech + Sound Events (content)
+
+**Problem**: Immich indexes no audio. A still frame can't distinguish *sitting at* a piano from *playing* one — the soundtrack is often the strongest, cheapest confirmation of an activity. Speech is also unsearchable.
+
+**Approach** (model spec §4): Whisper for speech, CLAP for sound events. Both run on the Mini (Whisper Metal-accelerated via whisper.cpp / faster-whisper).
+
+**Requirements**:
+- R102: Speech-to-text — transcribe video (and audio) with **Whisper large-v3** (or large-v3-turbo for throughput). Multilingual (EN/RU/UK) so transcripts index in-language. Store per-asset transcript in the index.
+- R103: Sound-event detection — **CLAP** audio embeddings searchable by text ("piano music", "applause", "laughter"); run on every video at ingest. (PANNs/YAMNet as fixed-label alternative.)
+- R104: Index transcripts + audio tags keyed to Immich asset IDs; expose to search/fusion.
+- R105: Runtime budget — Whisper (~2–3 GB) + CLAP (small) resident alongside the VLM within 24 GB (model spec §7).
+
+**Priority**: HIGH (model spec calls audio "required, not optional" for reliable activity search). v2 after IMP-018.
+
+### IMP-020: Signal Fusion & Multilingual Search (integration)
+
+**Problem**: The signals above are only useful when combined. "Son playing piano" = WHO (Immich person) + WHAT (VLM/CLIP) + activity (CLAP/Whisper), ranked by weighted fusion (model spec §5). Also, concept search must work across EN/RU/UK.
+
+**Requirements**:
+- R106: Multilingual concept search — switch Immich Smart Search to a **multilingual CLIP** model (Immich ML setting; one-time full re-index). Early config, not a FamilyVault model.
+- R107: Fusion ranking — combine Immich identity + CLIP + VLM caption/OCR + audio (Whisper/CLAP) into a single weighted score; weights chosen dynamically by the AI based on available signals (consistent with IMP-006/008 AI-first search).
+- R108: Alias/multilingual name mapping — map cross-script/misspelled names (Misha/Миша/Михаил) to one Immich person ID (application logic, not a model).
+
+**Priority**: MEDIUM — ties IMP-018/019 together; depends on at least IMP-018.
+
+### IMP-021: Photo Quality Scoring (quality)
+
+**Problem**: Selection scoring uses only Immich-derivable signals (face count, resolution, CLIP relevance, duration, diversity). It can't tell a sharp, well-exposed, well-composed shot from a soft/blown/accidental one. (R002 listed blur detection as "optional" — never built.)
+
+**Requirements**:
+- R109: Blur/sharpness — Laplacian variance on the thumbnail/keyframe; down-rank soft shots. (Fulfills the deferred R002.)
+- R110: Exposure — histogram-based under/over-exposure detection; down-rank too-dark/blown frames.
+- R111: Composition — basic heuristics (subject placement / rule-of-thirds, horizon) to nudge ranking.
+- R112: Aesthetic score — a lightweight aesthetic model (e.g. NIMA / LAION-aesthetic) for a "good photo" signal beyond face count. Run at ingest; store per-asset.
+
+**Priority**: MEDIUM — improves selection quality; independent of the understanding layer.
+
+### IMP-022: Face-Frame Quality — Eyes-Open / Smile / Expression (quality)
+
+**Problem**: When several frames capture the same moment (or a burst), nothing picks the frame where everyone's eyes are open and smiling. Immich gives identity, not per-frame expression quality.
+
+**Requirements**:
+- R113: Per-face frame quality — eyes-open and smile/expression detection on detected faces (lightweight CV, e.g. landmark/EAR + a small classifier; or a VLM-assisted check). **Not identity** — Immich owns who; this scores the *frame*.
+- R114: Use the signal to pick the best frame within a burst group (works with the existing time-based `detect_bursts`) and to break ties in timeline selection.
+
+**Priority**: MEDIUM — pairs with burst grouping (IMP-014) and quality scoring (IMP-021).
+
+---
+
 ## Implementation Order (recommended)
 
 | Priority | Improvement | Status | Rationale |
@@ -384,6 +454,11 @@ Story Engine v1 (spec 001) is functional but produces low-quality results:
 | — | **IMP-015**: Local LLM Agent | Phase 1 DONE | Independent track. Custom loop works e2e |
 | — | **IMP-016**: Assembler v2 — Runtime Wiring & E2E | Not started | HIGH — wire v2 builder into runtime; verify MP4 from v2 project.json. Unblocks IMP-015 R085 |
 | — | **IMP-017**: Local Agent — Goose Runtime | Parked / next | LOW — alternate runtime; custom loop already works |
+| — | **IMP-018**: VLM Captioning & Extraction (+OCR) | Not started | HIGH — content understanding (Qwen3-VL 8B). v1 of understanding layer |
+| — | **IMP-019**: Audio Understanding (Whisper + CLAP) | Not started | HIGH — speech + sound events; "required" for activity search |
+| — | **IMP-020**: Signal Fusion & Multilingual Search | Not started | MEDIUM — ties 018/019 together; multilingual CLIP swap |
+| — | **IMP-021**: Photo Quality Scoring | Not started | MEDIUM — blur/exposure/composition/aesthetic |
+| — | **IMP-022**: Face-Frame Quality (eyes/smile) | Not started | MEDIUM — best-frame selection; pairs with IMP-014 |
 
 **Notes**:
 - IMP-009 (Screenshot filter) is a quick win — spec and implement first.
