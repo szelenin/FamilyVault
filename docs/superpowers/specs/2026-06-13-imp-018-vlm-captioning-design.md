@@ -16,7 +16,7 @@ Build the **understanding-layer index**: for every Immich asset, generate a rich
 
 ## Scope
 
-- **In scope:** photo captioning + OCR (R097/R099), video keyframe sampling + captioning + OCR (R098), the SQLite index, **caption embeddings** (so the index supports semantic search), incremental/idempotent batch execution (R100), and feeding search/timeline (R101). Full IMP-018, built **photos-first** as a baseline, then video.
+- **In scope:** photo captioning + OCR (R097/R099), video keyframe sampling + captioning + OCR (R098), the SQLite index, **caption embeddings** (so the index supports semantic search), incremental/idempotent batch execution (R100), feeding search/timeline (R101), **environment setup + scoped preflight (`setup.sh`/`doctor`)**, and **automatic memory governance** (load only the phase's models; offload Immich/OrbStack only when measured RAM is low). Full IMP-018, built **photos-first** as a baseline, then video.
 - **Out of scope (later items):** fusion ranking + multilingual-CLIP swap → **IMP-020**; audio (Whisper/CLAP) → **IMP-019**; quality signals (blur/exposure/aesthetic/expression) → **IMP-021/022**. The timeline-caption replacement (R101) is wired here but the consuming UI is elsewhere.
 
 ---
@@ -34,9 +34,11 @@ Build the **understanding-layer index**: for every Immich asset, generate a rich
 | D7 | **Multilingual embedder `bge-m3` via Ollama** | EN/RU/UK queries must match English VLM captions cross-lingually. |
 | D8 | **Manual incremental CLI batch**, resumable; cron later | Fits the offload model; safe to re-run; no full re-index per run. SQLite is the progress ledger. |
 | D9 | **Immich "preview" images** (~1440–2048px) | One JPEG/asset (no HEIC convert), enough detail for most OCR; originals only as a later fallback for tiny text. |
-| D10 | **Chunked fetch→caption→cleanup**, staging budget **10 GB**, opt-in `--low-mem` Immich/OrbStack offload | Bounds staging disk to a chunk (not the whole library); decoupling fetch from caption lets us free RAM for the VLM during video. |
+| D10 | **Chunked fetch→caption→cleanup**, staging budget **10 GB**; offload driven by an **automatic memory governor** (not a manual flag) | Bounds staging disk to a chunk; decoupling fetch from caption lets us free RAM; governor offloads only when measured RAM is low. |
 | D11 | **Hybrid video frame sampling** (scene-detect + first/mid/last + min3/max~16–24, fallback uniform 1 fps) + **two-tier OCR** (extra high-res frames) | Consensus from research: fewer-richer frames beat many-cheap; hybrid covers single-shot home clips and multi-cut trips. |
 | D12 | **Aggregation: single multi-frame call**, map-reduce fallback for long clips | Best temporal reasoning in one call for the common (short) case; map-reduce only when frames exceed budget (what production systems do). |
+| D13 | **`setup.sh` + scoped `doctor` preflight** — no assumed environment | A run must not start half-installed; `doctor` checks presence-on-disk scoped to `--type` and fails fast with the exact fix. |
+| D14 | **Load only the phase's models; start unloaded** | "Installed" ≠ "loaded." Per-phase `REQUIRED_MODELS`; governor unloads the rest first → minimal resident RAM; partial runs don't need the other path's model. |
 
 ---
 
@@ -69,8 +71,11 @@ Build the **understanding-layer index**: for every Immich asset, generate a rich
 ```
 setup/understanding/
 ├── README.md
+├── setup.sh                  # install/pull everything (models, deps); idempotent
 ├── config.sh                 # INDEX_DB (native), INDEX_BACKUP_DIR (RAID), IMMICH_*,
-│                             # model names, STAGING_DIR, STAGING_BUDGET=10G, chunk/frame caps
+│                             # model names, STAGING_DIR, STAGING_BUDGET=10G, chunk/frame caps,
+│                             # MEMORY_POLICY=auto, mem thresholds/margins
+├── preflight.py              # `doctor` — verify env is ready (presence-on-disk), scoped to --type
 ├── index/
 │   ├── db.py                 # SQLite schema + FTS5 + vectors; open/migrate; upsert/query; backup
 │   └── status.py             # status enum: pending | done | no_preview | error
@@ -78,43 +83,84 @@ setup/understanding/
 │   ├── immich.py             # list assets, download preview, extract video frames (ffmpeg)
 │   └── sampling.py           # hybrid frame sampling (scene-detect + first/mid/last + caps)
 ├── caption/
-│   ├── base.py               # CaptionResult + captioner interface
+│   ├── base.py               # CaptionResult + captioner interface; per-phase REQUIRED_MODELS
 │   ├── photo_ollama.py       # photo caption+OCR via Ollama qwen3-vl:8b
 │   ├── video_mlx.py          # video caption+OCR via MLX-VLM
 │   └── embed.py              # caption/query embedding via Ollama bge-m3
-├── resources.py              # low-memory mode: stop/start Immich + OrbStack
-├── index_cli.py              # batch entrypoint (run/status/report/retry/search)
+├── resources.py              # memory governor: measure RAM; unload models / stop Immich / stop OrbStack
+├── index_cli.py              # batch entrypoint (doctor/run/status/report/retry/search)
 └── tests/
 ```
+
+**Installed vs loaded.** Models are *installed on disk* once (via `setup.sh`); they are *loaded into RAM* lazily, only when a phase needs them, and only one path's models are resident at a time (see Environment & Memory below).
 
 - **`index/db.py`** is the *only* thing that touches SQLite. **`fetch/`** is the *only* thing that touches Immich/FFmpeg. **`caption/`** is the *only* thing that touches the models. This keeps each unit swappable and mockable.
 
 ---
 
-## Data Flow & Resource Model
+## Environment & Setup
 
-Process in **chunks** so staging disk is bounded by chunk size, not library size:
+The pipeline does **not** assume things are installed. Two pieces guarantee a ready environment.
+
+**`setup.sh`** (idempotent) installs/pulls everything and documents gotchas:
+- `ollama pull qwen3-vl:8b`, `ollama pull bge-m3`
+- `pip install mlx-vlm scenedetect` (under `python3.13`); cache the MLX model; `brew install ffmpeg`
+- references `setup/local-agent/SETUP-NOTES.md` for the known gotchas (use `python3.13`, not the broken default `python3`; the Ollama formula + cask `llama-server` runner fix)
+
+**`doctor` (preflight, run before every `run`) — fails fast with the exact fix command.** Checks **presence on disk** (not loaded into RAM) and is **scoped to `--type`** so a partial run doesn't require the other path:
+
+| Run | Required (checked) | Skipped |
+|---|---|---|
+| `--type photo` | Ollama up + `qwen3-vl:8b` + `bge-m3` present (`/api/tags`); ffmpeg n/a | MLX |
+| `--type video` | `mlx_vlm` importable + MLX model cached; `ffmpeg` + `scenedetect`; Ollama `bge-m3` present | Ollama `qwen3-vl:8b` |
+| both | Immich reachable + API key; `python3.13`; SQLite path writable + WAL; free SSD ≥ staging budget | — |
+
+`bge-m3` (the embedder) is required by **both** types — captions for photos and videos are both embedded.
+
+**Disk for models:** `qwen3-vl:8b` (~6 GB, Ollama) + MLX model (~5–6 GB, HF cache) ≈ ~12 GB added, alongside existing `qwen3:14b` (9 GB). Comfortable on 124 GB free.
+
+---
+
+## Data Flow, Memory Governor & Model Lifecycle
+
+Process in **chunks** so staging disk is bounded by chunk size, not library size. A **memory governor** decides automatically whether to free RAM — the user does not babysit a flag.
 
 ```
+doctor:          verify env (scoped to --type) — fail fast if anything missing
 plan (Phase 0):  read SQLite → assets needing work
                  (status=pending OR source_hash changed OR schema_ver<current)
 
 repeat until done, filling up to STAGING_BUDGET (10 GB) per chunk:
    Phase 1  Fetch     [Immich UP]  preview JPEGs (photos) / sampled frames (video, ffmpeg)
                                    → STAGING_DIR on SSD.  Record no_preview / error per asset.
-   Phase 2  Offload   [--low-mem]  stop Immich + OrbStack (frees ~several GB for the VLM)
+   Phase 2  Govern    measure free RAM vs this phase's need; free only as much as required
+                      (escalation below). Ensure ONLY this phase's models are loaded.
    Phase 3  Caption                run captioners over STAGED LOCAL FILES (no Immich needed):
-                                   photos → Ollama; video → MLX-VLM; embed captions (bge-m3).
+                                   photos → Ollama qwen3-vl:8b; video → MLX-VLM; embed (bge-m3).
                                    Write rows to SQLite incrementally (resumable).
-   Phase 4  Cleanup                delete this chunk's staging files; restore Immich if offloaded.
+   Phase 4  Cleanup                delete this chunk's staging files; restore whatever Govern stopped.
 
 finally:  backup DB → RAID
 ```
 
-- **Decoupling fetch from caption** is what makes the offload possible — by Phase 3 every image/frame is a local file.
-- **`--low-mem` is opt-in.** Default keeps Immich up (Ollama auto-unloads idle models). `--low-mem` is for big video batches; larger chunks = fewer Immich restarts but more staging disk.
-- **Staging:** budget 10 GB on the SSD (124 GB free). Per-chunk cleanup → steady-state ≈ one chunk. On failure, the current chunk's files are kept (resume without re-fetch); `--clean-staging` forces a wipe.
-- **Disk for models:** `qwen3-vl:8b` (~6 GB, Ollama) + MLX model (~5–6 GB, HF cache) ≈ ~12 GB added, alongside existing `qwen3:14b` (9 GB). Comfortable on 124 GB free.
+**Memory governor (`resources.py`, automatic).** Before each caption phase it measures available RAM (`psutil`/`vm_stat`) and compares to the phase's estimated need + safety margin (photo: `qwen3-vl:8b` ~6 GB + `bge-m3` ~2 GB; video: MLX ~6 GB + ffmpeg). It frees **only as much as needed**, re-measuring after each step:
+
+1. **Unload Ollama models not needed for this phase** (`/api/ps` → `ollama stop <model>`) — reclaims up to ~9–15 GB if the local-agent's `qwen3:14b` or the other VLM was resident. *(cheapest; usually enough on 24 GB)*
+2. still short → **stop the Immich container stack** (`docker compose stop` under OrbStack)
+3. still short → **stop the OrbStack VM** (`orb stop`) to reclaim its RAM
+
+It **records exactly what it stopped** and restores those in Phase 4 (restart OrbStack → wait healthy → restart Immich). **`resources.py` is who stops OrbStack / frees memory — triggered automatically, not by the human.**
+
+**Model lifecycle — load only what the phase needs.** `caption/base.py` declares a per-phase `REQUIRED_MODELS` set (photo = {qwen3-vl:8b, bge-m3}; video = {mlx-qwen3-vl, bge-m3}). The governor unloads any loaded model **not** in that set, then the needed model loads lazily on first request. Even `--type all` processes photos *then* video, so only one path's models are resident at a time.
+
+**Policy override (default automatic):**
+- `--memory auto` (default) — governor decides per measurement
+- `--memory force` — always offload Immich/OrbStack (e.g. big overnight video batch)
+- `--memory never` — never touch Immich; proceed if RAM allows, else fail with a clear message
+
+**Decoupling fetch from caption** is what makes offload possible — by Phase 3 every image/frame is a local file, so Immich can be down.
+
+**Staging:** budget 10 GB on the SSD (124 GB free). Per-chunk cleanup → steady-state ≈ one chunk. On failure, the current chunk's files are kept (resume without re-fetch); `--clean-staging` forces a wipe. Larger chunks = fewer Immich restarts but more staging disk.
 
 ---
 
@@ -209,7 +255,8 @@ Fallbacks (A/B, if a model quirk appears): Qwen2.5-VL 7B or InternVL3 8B for cap
 ## Execution, Incremental & Error Handling
 
 **CLI (`index_cli.py`):**
-- `run [--type photo|video|all] [--low-mem] [--staging-budget 10G] [--limit N] [--reindex-schema]`
+- `doctor [--type photo|video|all]` — preflight env check (presence-on-disk, scoped); also auto-run at the start of `run`
+- `run [--type photo|video|all] [--memory auto|force|never] [--staging-budget 10G] [--limit N] [--reindex-schema] [--clean-staging]`
 - `status` — counts by status
 - `report` — **missing-preview remediation**: asset IDs + the exact Immich thumbnail-regeneration `POST /api/jobs` call + instructions
 - `retry [--status no_preview|error]`
@@ -227,15 +274,15 @@ Fallbacks (A/B, if a model quirk appears): Qwen2.5-VL 7B or InternVL3 8B for cap
 
 ## Implementation Phases
 
-- **Phase A — Foundation + Photos (baseline):** scaffolding, `config.sh`, `db.py` (schema + FTS5 + vector store + backup), `fetch/immich.py` (preview + missing-preview path), `caption/photo_ollama.py`, `caption/embed.py` (`bge-m3`), `index_cli run/status/report`, incremental planning. **Deliverable: all photos captioned + OCR'd + embedded + searchable.** Proves the whole spine.
-- **Phase B — Video:** `fetch/sampling.py` (hybrid scene-detect + ffmpeg), `caption/video_mlx.py` (MLX-VLM), `video_segments`, two-tier OCR, multi-frame aggregation + map-reduce fallback.
-- **Phase C — Resource mode + ops:** `resources.py` (offload Immich/OrbStack), `--low-mem` chunking, DB backup automation, `--auto-regenerate`.
+- **Phase A — Foundation + Photos (baseline):** `setup.sh` (photo set) + `preflight.py`/`doctor` (scoped); scaffolding, `config.sh`, `db.py` (schema + FTS5 + vector store + backup), `fetch/immich.py` (preview + missing-preview path), `caption/photo_ollama.py`, `caption/embed.py` (`bge-m3`), per-phase model lifecycle (unload non-needed Ollama models), `index_cli doctor/run/status/report`, incremental planning. **Deliverable: all photos captioned + OCR'd + embedded + searchable.** Proves the whole spine.
+- **Phase B — Video:** extend `setup.sh`/`doctor` (MLX + ffmpeg + scenedetect); `fetch/sampling.py` (hybrid scene-detect + ffmpeg), `caption/video_mlx.py` (MLX-VLM), `video_segments`, two-tier OCR, multi-frame aggregation + map-reduce fallback.
+- **Phase C — Automatic resource governance + ops:** `resources.py` memory governor (measure RAM → unload models → stop Immich → stop OrbStack, auto-restore), `--memory auto|force|never`, chunked staging, DB backup automation, `--auto-regenerate`.
 
 ---
 
 ## Testing
 
-- **Unit (no network):** `db.py` (schema, upsert, FTS sync, vector store/search, status transitions, `source_hash` change detection); `sampling.py` (frame selection on synthetic scene lists); captioner interface against a **mock model**; `resources.py` with mocked subprocess.
+- **Unit (no network):** `db.py` (schema, upsert, FTS sync, vector store/search, status transitions, `source_hash` change detection); `sampling.py` (frame selection on synthetic scene lists); captioner interface against a **mock model**; **`resources.py` governor** — escalation decisions on *mocked* memory readings + `/api/ps` (unload → stop Immich → stop OrbStack) and restore of only-what-it-stopped (mocked subprocess); **`preflight.py` doctor** — pass/fail + exact-fix messages on a mocked env, scoped per `--type`.
 - **Integration (opt-in):** live Immich preview fetch + missing-preview path; one live Ollama caption + `bge-m3` embed; real ffmpeg frame extraction on a short clip; MLX-VLM on one short clip.
 - **E2E:** index a tiny fixture (few photos + 1 short video) → assert rows written, captions non-empty, FTS **and** vector search each return the expected asset.
 
