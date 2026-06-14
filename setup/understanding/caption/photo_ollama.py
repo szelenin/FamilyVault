@@ -112,6 +112,26 @@ class OllamaVisionClient:
     def __init__(self, base_url: Optional[str] = None, model: Optional[str] = None):
         self.base_url = (base_url or _default_url()).rstrip("/")
         self.model = model or _MODEL
+        # Context window. Default 4K is too small once an image (~2.8K tokens) is
+        # in the prompt — text-heavy photos exhausted it and returned empty
+        # content. 8K leaves room for the image + reasoning + the JSON answer.
+        self.num_ctx = int(os.environ.get("OLLAMA_NUM_CTX", "8192"))
+
+    def _build_payload(self, model: str, image_b64: str) -> dict:
+        """Build an Ollama native /api/chat request with an adequate num_ctx.
+
+        Native /api/chat (not the OpenAI-compatible endpoint) is required because
+        only it accepts ``options.num_ctx``. Images go in the message's ``images``
+        array as raw base64.
+        """
+        return {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": _PROMPT, "images": [image_b64]},
+            ],
+            "stream": False,
+            "options": {"num_ctx": self.num_ctx},
+        }
 
     def __call__(self, model: str, image_path: str) -> str:
         import urllib.request
@@ -120,30 +140,9 @@ class OllamaVisionClient:
         with open(image_path, "rb") as fh:
             image_b64 = base64.b64encode(fh.read()).decode("ascii")
 
-        # Detect MIME type from extension (best-effort; Ollama accepts both)
-        ext = image_path.rsplit(".", 1)[-1].lower()
-        mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+        payload = json.dumps(self._build_payload(model, image_b64)).encode()
 
-        payload = json.dumps(
-            {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:{mime};base64,{image_b64}"},
-                            },
-                            {"type": "text", "text": _PROMPT},
-                        ],
-                    }
-                ],
-                "stream": False,
-            }
-        ).encode()
-
-        url = f"{self.base_url}/v1/chat/completions"
+        url = f"{self.base_url}/api/chat"
         req = urllib.request.Request(
             url,
             data=payload,
@@ -153,8 +152,8 @@ class OllamaVisionClient:
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read())
 
-        # Extract the text content from the OpenAI-compatible response
-        return data["choices"][0]["message"]["content"]
+        # Native /api/chat returns the assistant text under message.content
+        return data["message"]["content"]
 
 
 # ---------------------------------------------------------------------------

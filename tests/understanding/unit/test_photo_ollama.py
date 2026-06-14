@@ -210,3 +210,34 @@ class TestGracefulDegradation:
         cap = PhotoOllamaCaptioner(client=fake)
         result = cap.caption(["/tmp/pool.jpg"], is_video=False)
         assert result.ocr_text == ""
+
+
+# ---------------------------------------------------------------------------
+# Real-client request: use Ollama native /api/chat with an adequate context
+# window. A live run showed text-heavy images exhausting the default 4K context
+# (reasoning tokens) and returning empty content; num_ctx is not expressible on
+# the OpenAI-compatible endpoint, so the client uses /api/chat.
+# ---------------------------------------------------------------------------
+
+class TestOllamaVisionClientPayload:
+    def _client(self):
+        from caption.photo_ollama import OllamaVisionClient
+        return OllamaVisionClient(base_url="http://x:11434", model="qwen3-vl:8b")
+
+    def test_payload_sets_num_ctx_8192(self):
+        p = self._client()._build_payload("qwen3-vl:8b", "B64DATA")
+        assert p["options"]["num_ctx"] == 8192
+
+    def test_payload_uses_native_chat_image_format(self):
+        p = self._client()._build_payload("qwen3-vl:8b", "B64DATA")
+        assert p["stream"] is False
+        assert p["model"] == "qwen3-vl:8b"
+        msg = p["messages"][0]
+        assert "B64DATA" in msg["images"]          # native /api/chat images array
+        assert isinstance(msg["content"], str) and msg["content"]
+
+    def test_num_ctx_overridable_via_env(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_NUM_CTX", "16384")
+        from caption.photo_ollama import OllamaVisionClient
+        c = OllamaVisionClient(base_url="http://x:11434")
+        assert c._build_payload("qwen3-vl:8b", "B64")["options"]["num_ctx"] == 16384
