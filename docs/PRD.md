@@ -383,12 +383,15 @@ Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocat
 
 **Technical design**: `docs/superpowers/specs/2026-06-13-imp-018-vlm-captioning-design.md` (photos→Ollama, video→MLX-VLM, SQLite hybrid index with caption embeddings; photos-first phasing; chunked low-mem batch).
 
+**Error-handling design**: `docs/superpowers/specs/2026-06-14-imp-018-error-remediation-ladder-design.md` (typed error codes from `finish_reason`, raw reason persisted for audit, static per-code remediation ladder, operator/AI-driven `remediate` pass). Reference implementation + real-run problem context (US1 photos baseline; empty captions on text-heavy images): [PR #3](https://github.com/szelenin/FamilyVault/pull/3).
+
 **Requirements**:
 - R097: Ingest-time VLM captioning — generate a rich natural-language description per photo and per sampled video keyframe. Store captions in the FamilyVault index keyed to the Immich asset ID.
 - R098: Video frame handling — sample frames from clips and aggregate per-frame results into a video-level caption/conclusion (the model spec's "video frame handling" pipeline logic; leverage Qwen3-VL text–timestamp alignment for "when" an event occurs).
 - R099: OCR — extract visible text (signs, menus, documents) as part of the VLM extraction pass; index it for search.
 - R100: Selective/scheduled execution — do not caption the whole library eagerly; caption on a schedule or on first query (heavy batch job, slow-OK at ingest).
 - R101: Captions/OCR feed search and (optionally) replace hallucinated captions in timeline output.
+- R101a: Error handling & remediation — isolate per-asset failures with **typed error codes** (derived from `finish_reason`, e.g. `MODEL_TRUNCATED` vs `MODEL_EMPTY`), persist the raw reason + token usage for audit, and escalate via a **static per-code remediation ladder** (e.g. raise `num_ctx` → raise again → disable thinking) through an operator/AI-driven `remediate` pass that records every attempt; exhausted ladders flag for manual review. Designed after real-run failures where text-heavy images exhausted the 4 K context with reasoning tokens (see Error-handling design above). Scheduled with US4 (readiness/remediation).
 
 **Priority**: HIGH (v1 of the understanding layer per the model spec). Independent track.
 
