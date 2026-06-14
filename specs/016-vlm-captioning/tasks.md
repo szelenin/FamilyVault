@@ -50,16 +50,16 @@
 ### Tests (write first, confirm failing)
 
 - [ ] T013 [P] [US1] Failing unit tests for the photo fetcher in `tests/understanding/unit/test_fetch_immich_photo.py` (list assets; download preview to staging; **missing preview → `no_preview`**; capture `source_hash` + cached Immich fields) with mocked Immich
-- [ ] T014 [P] [US1] Failing unit tests for the photo captioner in `tests/understanding/unit/test_photo_ollama.py` (preview → CaptionResult; English caption; OCR; model errors → typed exception, never crash) with a mock model
+- [ ] T014 [P] [US1] Failing unit tests for the photo captioner in `tests/understanding/unit/test_photo_ollama.py` (preview → CaptionResult; English caption; OCR; model errors → typed exception, never crash; **privacy invariant (FR-007): CaptionResult exposes no person-identity field and the captioner derives no named-person data — `person_ids` come only from cached Immich fields, never from the caption path**) with a mock model
 - [ ] T015 [P] [US1] Failing unit tests for the photo run orchestration in `tests/understanding/unit/test_cli_run_photo.py` (chunking to staging budget; incremental skip of `done`; per-asset error isolation; DB backup at end) with mocks
-- [ ] T016 [US1] Failing e2e test in `tests/understanding/e2e/test_photo_e2e.py` (tiny photo fixture → `run --type photo` → rows `done` with caption + embedding; FTS query **and** vector query each return the expected asset)
+- [ ] T016 [US1] Failing e2e test in `tests/understanding/e2e/test_photo_e2e.py` (tiny photo fixture → `run --type photo` → rows `done` with caption + embedding; FTS query **and** vector query each return the expected asset; **cross-language: a RU or UK query for a concept whose stored caption is English returns the expected asset via the semantic path** — covers SC-003 / US1-AC3; this case needs a real `bge-m3` embedding, so if T016 otherwise mocks the embedder, place the cross-language assertion in `tests/understanding/integration/test_crosslang.py` under the opt-in marker to keep the unit/e2e suite mock-only and <60s)
 
 ### Implementation
 
 - [ ] T017 [US1] Implement `setup/understanding/fetch/immich.py` photo path (list assets, download preview, missing-preview detection, `source_hash`, cached fields) to pass T013
-- [ ] T018 [US1] Implement `setup/understanding/caption/photo_ollama.py` (Ollama `qwen3-vl:8b`; structured English caption+OCR prompt; OCR dedupe; embed via `embed.py`) to pass T014
+- [ ] T018 [US1] Implement `setup/understanding/caption/photo_ollama.py` (Ollama `qwen3-vl:8b`; structured English caption+OCR prompt that **does not ask for / does not return named-person identification — FR-007**; OCR dedupe; embed via `embed.py`) to pass T014
 - [ ] T019 [US1] Implement `setup/understanding/index_cli.py` `run --type photo` (chunked fetch→caption→embed→write→cleanup; incremental; per-asset error isolation; DB backup) + `status` command, to pass T015
-- [ ] T020 [US1] Implement `index_cli.py` `search "<query>"` (smoke hybrid FTS ∪ vector; multilingual query embed) to pass T016
+- [ ] T020 [US1] Implement `index_cli.py` `search "<query>"` (smoke hybrid FTS ∪ vector; multilingual query embed so a non-English query matches an English caption without translation — FR-004) to pass T016, **including its cross-language case**
 
 **Checkpoint**: US1 = shippable MVP (photo concept/text/cross-language search the archive never had).
 
@@ -95,7 +95,7 @@
 
 ### Tests (write first, confirm failing)
 
-- [ ] T029 [P] [US3] Failing unit tests for the memory governor in `tests/understanding/unit/test_resources.py` (escalation on mocked memory readings + `/api/ps`: unload non-required models → stop Immich → stop OrbStack; restore **only what was stopped**; `--memory auto|force|never` behavior) with mocked subprocess/command runners
+- [ ] T029 [P] [US3] Failing unit tests for the memory governor in `tests/understanding/unit/test_resources.py` (escalation on mocked memory readings + `/api/ps`: unload non-required models → stop Immich → stop OrbStack; restore **only what was stopped**; `--memory auto|force|never` behavior; **ample-memory case (SC-008): when free RAM ≥ phase need under `auto`, the governor takes no action — Immich/OrbStack are never stopped**) with mocked subprocess/command runners
 - [ ] T030 [P] [US3] Failing unit tests for per-phase model lifecycle in `tests/understanding/unit/test_model_lifecycle.py` (`REQUIRED_MODELS` → unload models not in the phase's set; only one path's models resident)
 - [ ] T031 [US3] Failing integration test (opt-in marker) in `tests/understanding/integration/test_governor_live.py` (under simulated low free-RAM the run frees memory and restores the photo server)
 
