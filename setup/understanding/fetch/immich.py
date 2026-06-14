@@ -21,6 +21,7 @@ mock).  No global session is held; callers supply it.
 """
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Union
 
@@ -171,6 +172,115 @@ def asset_filter_fields(immich_asset_json: dict) -> dict:
         "duration": duration,
         "source_hash": a.get("checksum"),
     }
+
+
+# ---------------------------------------------------------------------------
+# download_video
+# ---------------------------------------------------------------------------
+
+
+def download_video(
+    session,
+    asset_id: str,
+    dest_path: Union[str, Path],
+    *,
+    base_url: str = _DEFAULT_BASE_URL,
+) -> Union[str, None]:
+    """Download the original video for *asset_id* to *dest_path*.
+
+    Mirrors download_preview's contract exactly: non-200 or empty body → None.
+
+    Args:
+        session: A requests.Session-like object with a .get() method.
+        asset_id: The Immich asset UUID.
+        dest_path: Filesystem path where the video will be written.
+        base_url: Immich base URL (without trailing slash).
+
+    Returns:
+        The absolute path string of the written file on success, or None if
+        the response is non-200 or the body is empty.
+    """
+    url = f"{base_url}/api/assets/{asset_id}/original"
+    response = session.get(url)
+
+    if response.status_code != 200:
+        return None
+
+    content = response.content
+    if not content:
+        return None
+
+    dest = Path(dest_path)
+    dest.write_bytes(content)
+    return str(dest)
+
+
+# ---------------------------------------------------------------------------
+# extract_frames
+# ---------------------------------------------------------------------------
+
+
+def _build_ffmpeg_command(
+    video_path: str,
+    timestamp: float,
+    output_path: str,
+) -> list:
+    """Build the ffmpeg command list for extracting a single frame.
+
+    Uses '-ss' before '-i' for fast input-seek.  Grabs exactly one frame and
+    overwrites any existing output file.
+
+    Args:
+        video_path: Path to the source video file.
+        timestamp: Position in the video in seconds.
+        output_path: Destination path for the extracted JPEG frame.
+
+    Returns:
+        A list of strings suitable for subprocess.run.
+    """
+    return [
+        "ffmpeg",
+        "-ss", str(timestamp),
+        "-i", video_path,
+        "-frames:v", "1",
+        "-y",
+        output_path,
+    ]
+
+
+def extract_frames(
+    video_path: str,
+    timestamps: list,
+    dest_dir: Union[str, Path],
+    *,
+    runner=subprocess.run,
+) -> list:
+    """Extract one frame per timestamp from *video_path* into *dest_dir*.
+
+    For each timestamp the output filename is ``frame_<index>_<t>.jpg`` where
+    *index* is the zero-based position in *timestamps* (ensures uniqueness even
+    when the same timestamp appears more than once).
+
+    Args:
+        video_path: Path to the source video file.
+        timestamps: Sequence of positions (seconds, float) at which to grab frames.
+        dest_dir: Directory where extracted frame JPEGs will be written.
+        runner: Callable with the same signature as ``subprocess.run`` (injectable
+                for testing so no real ffmpeg process is spawned).
+
+    Returns:
+        Ordered list of output file paths (one per timestamp, in the same order).
+    """
+    dest = Path(dest_dir)
+    output_paths: list = []
+
+    for index, ts in enumerate(timestamps):
+        out_path = str(dest / f"frame_{index}_{ts}.jpg")
+        cmd = _build_ffmpeg_command(video_path, ts, out_path)
+        runner(cmd)
+        output_paths.append(out_path)
+
+    return output_paths
 
 
 # ---------------------------------------------------------------------------
