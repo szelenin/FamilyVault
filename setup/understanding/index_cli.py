@@ -55,11 +55,34 @@ _DEFAULT_STAGING_DIR = os.environ.get(
 _DEFAULT_CHUNK_SIZE = 50
 
 
+# Canonical key-file path provisioned by setup/immich/scripts/provision-api-key.sh
+# (also used by setup/story-engine). The CLI reads the key from here when the
+# IMMICH_API_KEY env var is not set, so no manual `export` is required.
+DEFAULT_API_KEY_FILE = "/Volumes/HomeRAID/immich/api-key.txt"
+
+
+def _resolve_api_key(*, env=None) -> str:
+    """Resolve the Immich API key: IMMICH_API_KEY env wins, else the key file.
+
+    The key file path comes from IMMICH_API_KEY_FILE (default
+    DEFAULT_API_KEY_FILE). Returns "" if neither is available.
+    """
+    env = os.environ if env is None else env
+    key = env.get("IMMICH_API_KEY", "")
+    if key:
+        return key
+    key_file = env.get("IMMICH_API_KEY_FILE", DEFAULT_API_KEY_FILE)
+    try:
+        return Path(key_file).read_text().strip()
+    except OSError:
+        return ""
+
+
 def _lazy_session():
-    """Build a real requests.Session with IMMICH_API_KEY header."""
+    """Build a real requests.Session with the x-api-key header."""
     import requests
 
-    api_key = os.environ.get("IMMICH_API_KEY", "")
+    api_key = _resolve_api_key()
     session = requests.Session()
     if api_key:
         session.headers["x-api-key"] = api_key

@@ -9,7 +9,7 @@
 
 # --- Immich source -----------------------------------------------------------
 : "${IMMICH_URL:=http://localhost:2283}"
-: "${IMMICH_API_KEY_FILE:=$HOME/.familyvault/immich_api_key}"
+: "${IMMICH_API_KEY_FILE:=/Volumes/HomeRAID/immich/api-key.txt}"   # provisioned by setup/immich
 
 # --- Staging (bounded scratch space on SSD) ----------------------------------
 : "${STAGING_DIR:=$HOME/.familyvault/staging}"
