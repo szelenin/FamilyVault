@@ -11,6 +11,13 @@ Today the archive can only be searched by shallow concept tags and by who is in 
 
 It runs as an **unattended batch indexer** on a memory-constrained home server, so it must be safe to run repeatedly, resumable after interruption, bounded in disk use, and able to manage system memory automatically.
 
+## Clarifications
+
+### Session 2026-06-14
+
+- Q: How are the search-accuracy criteria validated in IMP-018, given fusion ranking is deferred to IMP-020? → A: IMP-018 does a smoke-level check (a handful of known queries return the correct asset via basic hybrid text∪semantic retrieval); the quantitative 80/90/80% accuracy targets move to IMP-020 (fusion).
+- Q: In what language are the VLM descriptions stored? → A: English (single canonical language); cross-language search (EN/RU/UK queries) works via the multilingual semantic representation — descriptions are not translated/duplicated.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Searchable understanding of photos (Priority: P1)
@@ -98,10 +105,10 @@ Before doing heavy work, the operator can confirm the environment is ready. A ru
 ### Functional Requirements
 
 **Extraction & index (R097–R099, R101)**
-- **FR-001**: System MUST generate, for each photo, a natural-language description of what is happening (activity, context, relationships) and store it keyed to the asset.
+- **FR-001**: System MUST generate, for each photo, a natural-language description of what is happening (activity, context, relationships), stored in a **single canonical language (English)**, keyed to the asset.
 - **FR-002**: System MUST generate, for each video, a video-level description plus timestamped segment descriptions that allow locating *when* something happens.
 - **FR-003**: System MUST extract visible on-screen text (OCR) from photos and videos and store it as a searchable field, de-duplicating text repeated across video frames.
-- **FR-004**: System MUST store a semantic representation of each description that enables meaning-based retrieval, including cross-language queries (a query in one household language matching a description written in another).
+- **FR-004**: System MUST store a semantic representation of each (English) description that enables meaning-based retrieval, including **cross-language queries** — a query in any household language (e.g. RU/UK) MUST match the English description without storing translations. The query MUST be embedded with the same multilingual representation used for descriptions.
 - **FR-005**: System MUST make the index searchable both by meaning (semantic) and by exact text (names, on-screen text).
 - **FR-006**: System MUST key every index entry to the source asset identifier and cache the source filter fields needed for downstream ranking (date, location, people identifiers, favourite flag) without re-deriving identity itself.
 - **FR-007**: System MUST NOT attempt to identify specific named people from image content; "who" is resolved via the existing photo server's person identifiers.
@@ -138,8 +145,8 @@ Before doing heavy work, the operator can confirm the environment is ready. A ru
 ### Measurable Outcomes
 
 - **SC-001**: After a photo run, 100% of processable photos have a stored description and extracted-text field (or a recorded non-error status); none are silently skipped.
-- **SC-002**: For a labelled test set, a meaning-based query returns the correct asset in the top results in at least 80% of cases, and an exact on-screen-text query returns the correct asset in at least 90% of cases.
-- **SC-003**: A cross-language query (different language than the stored description) returns the correct asset for at least 80% of the test set.
+- **SC-002**: **Smoke-level (IMP-018):** a small set of known queries each return the correct asset via basic hybrid (text ∪ semantic) retrieval — a build-check that the stored descriptions/text/embeddings are usable. *(The tuned accuracy thresholds — meaning-based ≥80%, exact on-screen-text ≥90% — are validated in IMP-020 once fusion ranking exists.)*
+- **SC-003**: **Smoke-level (IMP-018):** at least one cross-language query (different language than the stored description) returns the correct asset, confirming multilingual semantic retrieval works. *(The ≥80% cross-language threshold is validated in IMP-020.)*
 - **SC-004**: Each indexed video yields a video-level description and at least one timestamped segment; multi-scene clips reflect more than one scene.
 - **SC-005**: Re-running with no source changes processes zero assets (fully idempotent); after a changed asset, exactly the changed asset is re-processed.
 - **SC-006**: An interrupted run, when re-run, re-processes zero already-completed assets and goes on to finish.

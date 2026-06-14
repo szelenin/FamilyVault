@@ -248,7 +248,9 @@ Fallbacks (A/B, if a model quirk appears): Qwen2.5-VL 7B or InternVL3 8B for cap
 3. One MLX-VLM call over sampled frames → JSON `{caption (video-level), segments:[{t_start,t_end,caption,ocr_text}], ocr_text}`. Clips exceeding the frame budget → **map-reduce** (window→caption→merge).
 4. Store `assets.caption` + `video_segments` rows; embed video-level + segment captions.
 
-**Prompt:** structured, requests JSON; instructs the model to describe activity (not identity) and to transcribe + **de-duplicate** on-screen text.
+**Prompt:** structured, requests JSON; instructs the model to describe activity (not identity), **write the description in English (canonical)**, and to transcribe + **de-duplicate** on-screen text.
+
+**Language & cross-language search:** descriptions are stored in **one canonical language — English** (no per-asset translations). Cross-language search works on the **query side**: the user's query (EN/RU/UK/…) is embedded with the **same multilingual embedder** (`bge-m3`) used for descriptions, so an in-language query lands near the English description's vector and returns it. OCR text is stored as-found (original language) and matched lexically. This is what lets an agent search in another language and still find the result.
 
 ---
 
