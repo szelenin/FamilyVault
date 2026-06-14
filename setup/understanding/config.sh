@@ -23,6 +23,7 @@
 : "${PHOTO_CAPTION_MODEL:=qwen3-vl:8b}"
 : "${EMBED_MODEL:=bge-m3}"
 : "${VIDEO_CAPTION_MODEL:=mlx-community/Qwen3-VL-8B-Instruct-4bit}"
+: "${OLLAMA_NUM_CTX:=8192}"         # photo VLM context window (image ~2.8K + reasoning + answer; 4K is too small)
 
 # --- Frame sampling caps (video) ---------------------------------------------
 : "${FRAME_MIN:=3}"                 # minimum frames per clip
@@ -34,5 +35,5 @@
 
 export INDEX_DB INDEX_BACKUP_DIR IMMICH_URL IMMICH_API_KEY_FILE \
        STAGING_DIR STAGING_BUDGET MEMORY_POLICY OLLAMA_URL \
-       PHOTO_CAPTION_MODEL EMBED_MODEL VIDEO_CAPTION_MODEL \
+       PHOTO_CAPTION_MODEL EMBED_MODEL VIDEO_CAPTION_MODEL OLLAMA_NUM_CTX \
        FRAME_MIN FRAME_MAX FRAMES_PER_SCENE PYTHON
