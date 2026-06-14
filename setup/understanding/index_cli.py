@@ -48,6 +48,8 @@ from fetch.immich import (
     list_video_assets,
 )
 from fetch.sampling import detect_scenes, plan_frames
+from caption.base import REQUIRED_MODELS
+from resources import MemoryGovernor
 
 # ---------------------------------------------------------------------------
 # Default / lazy helpers (not imported until needed, so tests avoid real deps)
@@ -64,6 +66,10 @@ _DEFAULT_STAGING_DIR = os.environ.get(
 )
 
 _DEFAULT_CHUNK_SIZE = 50
+
+# Per-phase memory need (GB) used by the governor to decide when to free RAM.
+PHOTO_NEED_GB = float(os.environ.get("PHOTO_NEED_GB", "9"))
+VIDEO_NEED_GB = float(os.environ.get("VIDEO_NEED_GB", "12"))
 
 
 # Canonical key-file path provisioned by setup/immich/scripts/provision-api-key.sh
@@ -202,6 +208,10 @@ def run_photos(
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
     backup_dir=None,
     limit: Optional[int] = None,
+    governor=None,
+    memory_policy: str = "auto",
+    need_gb: Optional[float] = None,
+    clean_staging: bool = False,
 ) -> dict:
     """Index all Immich photo assets using injected dependencies.
 
@@ -239,6 +249,8 @@ def run_photos(
         embed_fn = _lazy_embed_fn()
 
     staging_dir = Path(staging_dir)
+    if clean_staging and staging_dir.exists():
+        shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: List Immich assets
@@ -257,46 +269,64 @@ def run_photos(
     if limit is not None:
         todo = todo[:limit]
 
-    # Step 4: Process in chunks
+    # Step 4: Process in chunks. Each chunk runs in two phases so the memory
+    # governor can free RAM (incl. stopping Immich) for captioning WITHOUT
+    # breaking the fetch phase, which needs Immich:
+    #   pass 1: fetch previews (Immich up) → pass 2: govern → caption → restore.
     for chunk_start in range(0, max(len(todo), 1), chunk_size):
         chunk = todo[chunk_start : chunk_start + chunk_size]
         chunk_staged: list[Path] = []
+        ready: list[tuple] = []  # (asset_id, preview_path) that fetched OK
 
+        # --- pass 1: fetch (Immich required) ---
         for item in chunk:
             asset_id = item["asset_id"]
             dest_path = staging_dir / f"{asset_id}.jpg"
-
             try:
                 prev = download_preview(session, asset_id, dest_path)
                 if prev is None:
                     set_status(conn, asset_id, Status.NO_PREVIEW)
                     continue
-
                 chunk_staged.append(Path(prev))
-
-                cr = captioner.caption([prev], is_video=False)
-                emb = embed_fn(cr.caption)
-
-                # Build the full row from the current DB state + caption results
-                row_raw = conn.execute(
-                    "SELECT * FROM assets WHERE asset_id=?", (asset_id,)
-                ).fetchone()
-                row = dict(row_raw) if row_raw else {"asset_id": asset_id}
-                row.update(
-                    caption=cr.caption,
-                    ocr_text=cr.ocr_text,
-                    caption_embedding=emb,
-                    caption_model=cr.model,
-                    embed_model="bge-m3",
-                    schema_ver=schema_ver,
-                    status="done",
-                    error=None,
-                    indexed_at=datetime.now(timezone.utc).isoformat(),
-                )
-                upsert_asset(conn, row)
-
-            except Exception as exc:  # per-asset isolation: never abort batch
+                ready.append((asset_id, prev))
+            except Exception as exc:  # per-asset isolation
                 set_status(conn, asset_id, Status.ERROR, error=str(exc))
+
+        # --- govern the caption phase (Immich no longer needed) ---
+        state = None
+        if governor is not None:
+            state = governor.free_for_phase(
+                REQUIRED_MODELS["photo"],
+                policy=memory_policy,
+                need_gb=need_gb if need_gb is not None else PHOTO_NEED_GB,
+            )
+        try:
+            # --- pass 2: caption + embed + write (no Immich) ---
+            for asset_id, prev in ready:
+                try:
+                    cr = captioner.caption([prev], is_video=False)
+                    emb = embed_fn(cr.caption)
+                    row_raw = conn.execute(
+                        "SELECT * FROM assets WHERE asset_id=?", (asset_id,)
+                    ).fetchone()
+                    row = dict(row_raw) if row_raw else {"asset_id": asset_id}
+                    row.update(
+                        caption=cr.caption,
+                        ocr_text=cr.ocr_text,
+                        caption_embedding=emb,
+                        caption_model=cr.model,
+                        embed_model="bge-m3",
+                        schema_ver=schema_ver,
+                        status="done",
+                        error=None,
+                        indexed_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                    upsert_asset(conn, row)
+                except Exception as exc:  # per-asset isolation: never abort batch
+                    set_status(conn, asset_id, Status.ERROR, error=str(exc))
+        finally:
+            if governor is not None and state is not None:
+                governor.restore(state)
 
         # After each chunk: delete staged preview files
         for staged_file in chunk_staged:
@@ -334,6 +364,10 @@ def run_videos(
     detect_scenes_fn=None,
     extract_frames_fn=None,
     runner=None,
+    governor=None,
+    memory_policy: str = "auto",
+    need_gb: Optional[float] = None,
+    clean_staging: bool = False,
 ) -> dict:
     """Index Immich VIDEO assets: sample frames → caption (video-level + segments)
     → embed → write asset row + video_segments.
@@ -354,6 +388,8 @@ def run_videos(
         extract_frames_fn = extract_frames
 
     staging_dir = Path(staging_dir)
+    if clean_staging and staging_dir.exists():
+        shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
     # Discover + reconcile (change detection) — same as photos.
@@ -366,60 +402,80 @@ def run_videos(
     if limit is not None:
         todo = todo[:limit]
 
+    # Two-phase chunks (same rationale as run_photos): download with Immich up,
+    # then govern + caption (Immich not needed for ffmpeg/scenedetect/MLX).
     for chunk_start in range(0, max(len(todo), 1), chunk_size):
         chunk = todo[chunk_start : chunk_start + chunk_size]
         chunk_staged: list[Path] = []
+        ready: list[tuple] = []  # (asset_id, vpath)
 
+        # --- pass 1: download videos (Immich required) ---
         for item in chunk:
             asset_id = item["asset_id"]
             video_path = staging_dir / f"{asset_id}.mp4"
-            frames_dir = staging_dir / asset_id
-
             try:
                 vpath = download_video(session, asset_id, str(video_path))
                 if vpath is None:
                     set_status(conn, asset_id, Status.NO_PREVIEW)
                     continue
                 chunk_staged.append(Path(vpath))
-
-                row_raw = conn.execute(
-                    "SELECT * FROM assets WHERE asset_id=?", (asset_id,)
-                ).fetchone()
-                fields = dict(row_raw) if row_raw else {"asset_id": asset_id}
-
-                scenes = detect_scenes_fn(vpath)
-                duration = fields.get("duration") or (scenes[-1][1] if scenes else 10.0)
-                splan = plan_frames(scenes, duration)
-
-                frames_dir.mkdir(parents=True, exist_ok=True)
-                chunk_staged.append(frames_dir)
-                extra = {"runner": runner} if runner is not None else {}
-                frames = extract_frames_fn(
-                    vpath, splan.caption_frames, str(frames_dir), **extra
-                )
-
-                cr = captioner.caption(
-                    frames, is_video=True, frame_times=splan.caption_frames
-                )
-                emb = embed_fn(cr.caption)
-
-                row = dict(fields)
-                row.update(
-                    caption=cr.caption,
-                    ocr_text=cr.ocr_text,
-                    caption_embedding=emb,
-                    caption_model=cr.model,
-                    embed_model="bge-m3",
-                    schema_ver=schema_ver,
-                    status="done",
-                    error=None,
-                    indexed_at=datetime.now(timezone.utc).isoformat(),
-                )
-                upsert_asset(conn, row)
-                upsert_segments(conn, asset_id, cr.segments or [])
-
-            except Exception as exc:  # per-asset isolation: never abort the batch
+                ready.append((asset_id, vpath))
+            except Exception as exc:  # per-asset isolation
                 set_status(conn, asset_id, Status.ERROR, error=str(exc))
+
+        # --- govern the caption phase (Immich no longer needed) ---
+        state = None
+        if governor is not None:
+            state = governor.free_for_phase(
+                REQUIRED_MODELS["video"],
+                policy=memory_policy,
+                need_gb=need_gb if need_gb is not None else VIDEO_NEED_GB,
+            )
+        try:
+            # --- pass 2: sample → extract → caption → embed → write ---
+            for asset_id, vpath in ready:
+                frames_dir = staging_dir / asset_id
+                try:
+                    row_raw = conn.execute(
+                        "SELECT * FROM assets WHERE asset_id=?", (asset_id,)
+                    ).fetchone()
+                    fields = dict(row_raw) if row_raw else {"asset_id": asset_id}
+
+                    scenes = detect_scenes_fn(vpath)
+                    duration = fields.get("duration") or (scenes[-1][1] if scenes else 10.0)
+                    splan = plan_frames(scenes, duration)
+
+                    frames_dir.mkdir(parents=True, exist_ok=True)
+                    chunk_staged.append(frames_dir)
+                    extra = {"runner": runner} if runner is not None else {}
+                    frames = extract_frames_fn(
+                        vpath, splan.caption_frames, str(frames_dir), **extra
+                    )
+
+                    cr = captioner.caption(
+                        frames, is_video=True, frame_times=splan.caption_frames
+                    )
+                    emb = embed_fn(cr.caption)
+
+                    row = dict(fields)
+                    row.update(
+                        caption=cr.caption,
+                        ocr_text=cr.ocr_text,
+                        caption_embedding=emb,
+                        caption_model=cr.model,
+                        embed_model="bge-m3",
+                        schema_ver=schema_ver,
+                        status="done",
+                        error=None,
+                        indexed_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                    upsert_asset(conn, row)
+                    upsert_segments(conn, asset_id, cr.segments or [])
+                except Exception as exc:  # per-asset isolation: never abort the batch
+                    set_status(conn, asset_id, Status.ERROR, error=str(exc))
+        finally:
+            if governor is not None and state is not None:
+                governor.restore(state)
 
         for staged in chunk_staged:
             try:
@@ -558,6 +614,20 @@ def main(argv=None) -> None:
         default=_DEFAULT_CHUNK_SIZE,
         help="Assets per chunk (bounds staging usage; default: %(default)s).",
     )
+    run_p.add_argument(
+        "--memory",
+        dest="memory_policy",
+        choices=["auto", "force", "never"],
+        default="auto",
+        help="Memory governor policy: auto frees RAM only when low (default); "
+        "force always offloads Immich/OrbStack; never touches neither and stops "
+        "with a clear message if RAM is insufficient.",
+    )
+    run_p.add_argument(
+        "--clean-staging",
+        action="store_true",
+        help="Wipe the staging dir before starting.",
+    )
 
     # --- status ---
     sub.add_parser("status", help="Print index counts.")
@@ -593,6 +663,9 @@ def main(argv=None) -> None:
                 chunk_size=args.chunk_size,
                 backup_dir=args.backup_dir,
                 limit=args.limit,
+                governor=MemoryGovernor(),
+                memory_policy=args.memory_policy,
+                clean_staging=args.clean_staging,
             )
             print(
                 f"Run complete — done={result['done']} "

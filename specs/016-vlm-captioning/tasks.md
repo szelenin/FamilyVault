@@ -95,15 +95,15 @@
 
 ### Tests (write first, confirm failing)
 
-- [ ] T029 [P] [US3] Failing unit tests for the memory governor in `tests/understanding/unit/test_resources.py` (escalation on mocked memory readings + `/api/ps`: unload non-required models → stop Immich → stop OrbStack; restore **only what was stopped**; `--memory auto|force|never` behavior; **ample-memory case (SC-008): when free RAM ≥ phase need under `auto`, the governor takes no action — Immich/OrbStack are never stopped**) with mocked subprocess/command runners
-- [ ] T030 [P] [US3] Failing unit tests for per-phase model lifecycle in `tests/understanding/unit/test_model_lifecycle.py` (`REQUIRED_MODELS` → unload models not in the phase's set; only one path's models resident)
-- [ ] T031 [US3] Failing integration test (opt-in marker) in `tests/understanding/integration/test_governor_live.py` (under simulated low free-RAM the run frees memory and restores the photo server)
+- [x] T029 [P] [US3] Failing unit tests for the memory governor in `tests/understanding/unit/test_resources.py` (escalation on mocked memory readings + `/api/ps`: unload non-required models → stop Immich → stop OrbStack; restore **only what was stopped**; `--memory auto|force|never` behavior; **ample-memory case (SC-008): when free RAM ≥ phase need under `auto`, the governor takes no action — Immich/OrbStack are never stopped**) with mocked subprocess/command runners
+- [x] T030 [P] [US3] Failing unit tests for per-phase model lifecycle in `tests/understanding/unit/test_model_lifecycle.py` (`REQUIRED_MODELS` → unload models not in the phase's set; only one path's models resident)
+- [x] T031 [US3] Failing integration test (opt-in marker) in `tests/understanding/integration/test_governor_live.py` (under simulated low free-RAM the run frees memory and restores the photo server)
 
 ### Implementation
 
-- [ ] T032 [US3] Implement `setup/understanding/resources.py` (measure RAM via `psutil`; escalate; record + restore; injectable command runners) to pass T029
-- [ ] T033 [US3] Integrate governor into `index_cli.py run` (Govern step before caption; `--memory auto|force|never`; per-phase model load/unload) to pass T030
-- [ ] T034 [US3] Enforce staging budget + `--clean-staging` + resume-on-failure in `index_cli.py` (verify chunk cleanup steady-state ≈ one chunk; resumable after crash)
+- [x] T032 [US3] Implement `setup/understanding/resources.py` (measure RAM via `psutil`; escalate; record + restore; injectable command runners) to pass T029
+- [x] T033 [US3] Integrate governor into `index_cli.py run` (Govern step before caption; `--memory auto|force|never`; per-phase model load/unload) to pass T030
+- [x] T034 [US3] Enforce staging budget + `--clean-staging` + resume-on-failure in `index_cli.py` (verify chunk cleanup steady-state ≈ one chunk; resumable after crash)
 
 **Checkpoint**: US3 independently testable (safe unattended large runs).
 
