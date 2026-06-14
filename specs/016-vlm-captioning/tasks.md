@@ -72,17 +72,17 @@
 
 ### Tests (write first, confirm failing)
 
-- [ ] T021 [P] [US2] Failing unit tests for frame sampling in `tests/understanding/unit/test_sampling.py` (hybrid: scene-detect → 1–2/scene + first/mid/last + min3/max~16–24; uniform fallback when ≤1 scene; OCR-tier frame selection) on synthetic scene lists
-- [ ] T022 [P] [US2] Failing unit tests for the video captioner in `tests/understanding/unit/test_video_mlx.py` (frames → CaptionResult with `segments` + timestamps; map-reduce path when over frame budget; OCR dedupe) with a mock MLX backend
-- [ ] T023 [P] [US2] Failing unit tests for video frame extraction in `tests/understanding/unit/test_fetch_immich_video.py` (ffmpeg invocation to staging; mocked ffmpeg)
-- [ ] T024 [US2] Failing e2e test in `tests/understanding/e2e/test_video_e2e.py` (single-shot + multi-scene fixtures → `run --type video` → video-level caption + ≥1 segment; multi-scene >1 scene; OCR captured)
+- [x] T021 [P] [US2] Failing unit tests for frame sampling in `tests/understanding/unit/test_sampling.py` (hybrid: scene-detect → 1–2/scene + first/mid/last + min3/max~16–24; uniform fallback when ≤1 scene; OCR-tier frame selection) on synthetic scene lists
+- [x] T022 [P] [US2] Failing unit tests for the video captioner in `tests/understanding/unit/test_video_mlx.py` (frames → CaptionResult with `segments` + timestamps; map-reduce path when over frame budget; OCR dedupe) with a mock MLX backend
+- [x] T023 [P] [US2] Failing unit tests for video frame extraction in `tests/understanding/unit/test_fetch_immich_video.py` (ffmpeg invocation to staging; mocked ffmpeg)
+- [x] T024 [US2] Failing e2e test in `tests/understanding/e2e/test_video_e2e.py` (single-shot + multi-scene fixtures → `run --type video` → video-level caption + ≥1 segment; multi-scene >1 scene; OCR captured)
 
 ### Implementation
 
-- [ ] T025 [P] [US2] Implement `setup/understanding/fetch/sampling.py` (PySceneDetect ContentDetector/AdaptiveDetector + caps + uniform fallback + OCR-tier high-res frames) to pass T021
-- [ ] T026 [US2] Extend `setup/understanding/fetch/immich.py` with video frame extraction via ffmpeg to staging, to pass T023
-- [ ] T027 [US2] Implement `setup/understanding/caption/video_mlx.py` (MLX-VLM multi-frame single call; map-reduce fallback; populate `segments`) to pass T022
-- [ ] T028 [US2] Wire `index_cli.py` `run --type video` (sampling + video_mlx + `video_segments` + embed); extend `setup.sh` with video deps, to pass T024
+- [x] T025 [P] [US2] Implement `setup/understanding/fetch/sampling.py` (PySceneDetect ContentDetector/AdaptiveDetector + caps + uniform fallback + OCR-tier high-res frames) to pass T021
+- [x] T026 [US2] Extend `setup/understanding/fetch/immich.py` with video frame extraction via ffmpeg to staging, to pass T023
+- [x] T027 [US2] Implement `setup/understanding/caption/video_mlx.py` (MLX-VLM multi-frame single call; map-reduce fallback; populate `segments`) to pass T022
+- [x] T028 [US2] Wire `index_cli.py` `run --type video` (sampling + video_mlx + `video_segments` + embed); extend `setup.sh` with video deps, to pass T024
 
 **Checkpoint**: US2 independently testable (video activity/text/moment search).
 

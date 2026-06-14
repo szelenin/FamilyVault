@@ -238,3 +238,31 @@ class TestExtractFrames:
         # index 0 → "frame_0_2.5.jpg" (or similar); index 1 → "frame_1_8.0.jpg"
         assert "0" in Path(paths[0]).name
         assert "1" in Path(paths[1]).name
+
+
+class TestListVideoAssets:
+    def _resp(self, items, next_page=None):
+        from unittest.mock import MagicMock
+        r = MagicMock()
+        r.json.return_value = {"assets": {"items": items, "nextPage": next_page}}
+        return r
+
+    def test_paginates_and_returns_all_videos(self):
+        from unittest.mock import MagicMock
+        from fetch.immich import list_video_assets
+        s = MagicMock()
+        s.post.side_effect = [
+            self._resp([{"id": "v1", "type": "VIDEO"}], next_page=2),
+            self._resp([{"id": "v2", "type": "VIDEO"}], next_page=None),
+        ]
+        assets = list_video_assets(s, base_url="http://x:2283")
+        assert [a["id"] for a in assets] == ["v1", "v2"]
+
+    def test_post_body_requests_video_type(self):
+        from unittest.mock import MagicMock
+        from fetch.immich import list_video_assets
+        s = MagicMock()
+        s.post.return_value = self._resp([], next_page=None)
+        list_video_assets(s, base_url="http://x:2283")
+        _, kwargs = s.post.call_args
+        assert kwargs["json"]["type"] == "VIDEO"

@@ -77,6 +77,34 @@ def list_photo_assets(
     return assets
 
 
+def list_video_assets(
+    session,
+    *,
+    base_url: str = _DEFAULT_BASE_URL,
+    page_size: int = _DEFAULT_PAGE_SIZE,
+) -> list:
+    """Return all VIDEO assets from Immich, paginating until exhausted.
+
+    Mirrors list_photo_assets with type=VIDEO.
+    """
+    url = f"{base_url}/api/search/metadata"
+    assets: list = []
+    page = 1
+
+    while True:
+        body = {"type": "VIDEO", "page": page, "size": page_size}
+        response = session.post(url, json=body)
+        data = response.json()
+        assets.extend(data["assets"]["items"])
+
+        next_page = data["assets"].get("nextPage")
+        if not next_page:
+            break
+        page = next_page
+
+    return assets
+
+
 # ---------------------------------------------------------------------------
 # download_preview
 # ---------------------------------------------------------------------------

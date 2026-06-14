@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+import shutil
+
 from index.db import (
     CURRENT_SCHEMA_VER,
     backup,
@@ -34,9 +36,18 @@ from index.db import (
     search,
     set_status,
     upsert_asset,
+    upsert_segments,
 )
 from index.status import Status
-from fetch.immich import asset_filter_fields, download_preview, list_photo_assets
+from fetch.immich import (
+    asset_filter_fields,
+    download_preview,
+    download_video,
+    extract_frames,
+    list_photo_assets,
+    list_video_assets,
+)
+from fetch.sampling import detect_scenes, plan_frames
 
 # ---------------------------------------------------------------------------
 # Default / lazy helpers (not imported until needed, so tests avoid real deps)
@@ -94,6 +105,13 @@ def _lazy_captioner():
     from caption.photo_ollama import PhotoOllamaCaptioner
 
     return PhotoOllamaCaptioner()
+
+
+def _lazy_video_captioner():
+    """Build the default video captioner (real MLX-VLM)."""
+    from caption.video_mlx import VideoMLXCaptioner
+
+    return VideoMLXCaptioner()
 
 
 def _lazy_embed_fn():
@@ -298,6 +316,129 @@ def run_photos(
 
 
 # ---------------------------------------------------------------------------
+# run_videos
+# ---------------------------------------------------------------------------
+
+
+def run_videos(
+    conn,
+    *,
+    session=None,
+    captioner=None,
+    embed_fn=None,
+    staging_dir,
+    schema_ver: int = CURRENT_SCHEMA_VER,
+    chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    backup_dir=None,
+    limit: Optional[int] = None,
+    detect_scenes_fn=None,
+    extract_frames_fn=None,
+    runner=None,
+) -> dict:
+    """Index Immich VIDEO assets: sample frames → caption (video-level + segments)
+    → embed → write asset row + video_segments.
+
+    Same incremental/chunked/error-isolated shape as run_photos. External seams
+    (session, captioner, embed_fn, scene detection, frame extraction) are injected
+    so the pipeline is testable without ffmpeg/scenedetect/MLX.
+    """
+    if session is None:
+        session = _lazy_session()
+    if captioner is None:
+        captioner = _lazy_video_captioner()
+    if embed_fn is None:
+        embed_fn = _lazy_embed_fn()
+    if detect_scenes_fn is None:
+        detect_scenes_fn = detect_scenes
+    if extract_frames_fn is None:
+        extract_frames_fn = extract_frames
+
+    staging_dir = Path(staging_dir)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+
+    # Discover + reconcile (change detection) — same as photos.
+    current_state = index_state(conn)
+    for raw_asset in list_video_assets(session):
+        fields = asset_filter_fields(raw_asset)
+        _reconcile(conn, fields, current_state.get(fields["asset_id"]), schema_ver)
+
+    todo = plan(conn, type="VIDEO", schema_ver=schema_ver)
+    if limit is not None:
+        todo = todo[:limit]
+
+    for chunk_start in range(0, max(len(todo), 1), chunk_size):
+        chunk = todo[chunk_start : chunk_start + chunk_size]
+        chunk_staged: list[Path] = []
+
+        for item in chunk:
+            asset_id = item["asset_id"]
+            video_path = staging_dir / f"{asset_id}.mp4"
+            frames_dir = staging_dir / asset_id
+
+            try:
+                vpath = download_video(session, asset_id, str(video_path))
+                if vpath is None:
+                    set_status(conn, asset_id, Status.NO_PREVIEW)
+                    continue
+                chunk_staged.append(Path(vpath))
+
+                row_raw = conn.execute(
+                    "SELECT * FROM assets WHERE asset_id=?", (asset_id,)
+                ).fetchone()
+                fields = dict(row_raw) if row_raw else {"asset_id": asset_id}
+
+                scenes = detect_scenes_fn(vpath)
+                duration = fields.get("duration") or (scenes[-1][1] if scenes else 10.0)
+                splan = plan_frames(scenes, duration)
+
+                frames_dir.mkdir(parents=True, exist_ok=True)
+                chunk_staged.append(frames_dir)
+                extra = {"runner": runner} if runner is not None else {}
+                frames = extract_frames_fn(
+                    vpath, splan.caption_frames, str(frames_dir), **extra
+                )
+
+                cr = captioner.caption(
+                    frames, is_video=True, frame_times=splan.caption_frames
+                )
+                emb = embed_fn(cr.caption)
+
+                row = dict(fields)
+                row.update(
+                    caption=cr.caption,
+                    ocr_text=cr.ocr_text,
+                    caption_embedding=emb,
+                    caption_model=cr.model,
+                    embed_model="bge-m3",
+                    schema_ver=schema_ver,
+                    status="done",
+                    error=None,
+                    indexed_at=datetime.now(timezone.utc).isoformat(),
+                )
+                upsert_asset(conn, row)
+                upsert_segments(conn, asset_id, cr.segments or [])
+
+            except Exception as exc:  # per-asset isolation: never abort the batch
+                set_status(conn, asset_id, Status.ERROR, error=str(exc))
+
+        for staged in chunk_staged:
+            try:
+                if staged.is_dir():
+                    shutil.rmtree(staged, ignore_errors=True)
+                else:
+                    staged.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    if backup_dir is not None:
+        backup_dir = Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup(conn, str(backup_dir))
+
+    return counts(conn)
+
+
+# ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
 
@@ -391,7 +532,7 @@ def main(argv=None) -> None:
     run_p.add_argument(
         "--type",
         dest="asset_type",
-        choices=["photo"],
+        choices=["photo", "video"],
         required=True,
         help="Asset type to index.",
     )
@@ -444,24 +585,23 @@ def main(argv=None) -> None:
 
     try:
         if args.command == "run":
-            if args.asset_type == "photo":
-                result = run_photos(
-                    conn,
-                    staging_dir=args.staging_dir,
-                    schema_ver=CURRENT_SCHEMA_VER,
-                    chunk_size=args.chunk_size,
-                    backup_dir=args.backup_dir,
-                    limit=args.limit,
-                )
-                # Print summary
-                print(
-                    f"Run complete — done={result['done']} "
-                    f"pending={result['pending']} "
-                    f"no_preview={result['no_preview']} "
-                    f"error={result['error']}"
-                )
-                if result["pending"] > 0 and result["done"] == 0:
-                    sys.exit(2)
+            run_fn = run_photos if args.asset_type == "photo" else run_videos
+            result = run_fn(
+                conn,
+                staging_dir=args.staging_dir,
+                schema_ver=CURRENT_SCHEMA_VER,
+                chunk_size=args.chunk_size,
+                backup_dir=args.backup_dir,
+                limit=args.limit,
+            )
+            print(
+                f"Run complete — done={result['done']} "
+                f"pending={result['pending']} "
+                f"no_preview={result['no_preview']} "
+                f"error={result['error']}"
+            )
+            if result["pending"] > 0 and result["done"] == 0:
+                sys.exit(2)
             sys.exit(0)
 
         elif args.command == "status":
