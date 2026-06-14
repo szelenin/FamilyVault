@@ -18,10 +18,10 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Create module skeleton: `setup/understanding/__init__.py`, `setup/understanding/index/__init__.py`, `setup/understanding/fetch/__init__.py`, `setup/understanding/caption/__init__.py`
-- [ ] T002 [P] Write `setup/understanding/config.sh` (INDEX_DB native default `~/.familyvault/index/familyvault.db`, INDEX_BACKUP_DIR on RAID, IMMICH_URL/IMMICH_API_KEY_FILE, STAGING_DIR, STAGING_BUDGET=10G, MEMORY_POLICY=auto, OLLAMA_URL, model names qwen3-vl:8b/bge-m3/MLX, frame caps)
-- [ ] T003 [P] Create `tests/understanding/{unit,integration,e2e}/` with `conftest.py` adding `setup/understanding` to `sys.path`; register `integration` + `e2e` pytest markers (opt-in) in repo pytest config
-- [ ] T004 Write `setup/understanding/setup.sh` (idempotent): `ollama pull qwen3-vl:8b` + `ollama pull bge-m3`; `pip install --break-system-packages` (python3.13) `mlx-vlm scenedetect`; ensure `ffmpeg`; cache MLX model; document `python3.13` + Ollama-runner gotchas (ref `setup/local-agent/SETUP-NOTES.md`)
+- [x] T001 [P] Create module skeleton: `setup/understanding/__init__.py`, `setup/understanding/index/__init__.py`, `setup/understanding/fetch/__init__.py`, `setup/understanding/caption/__init__.py`
+- [x] T002 [P] Write `setup/understanding/config.sh` (INDEX_DB native default `~/.familyvault/index/familyvault.db`, INDEX_BACKUP_DIR on RAID, IMMICH_URL/IMMICH_API_KEY_FILE, STAGING_DIR, STAGING_BUDGET=10G, MEMORY_POLICY=auto, OLLAMA_URL, model names qwen3-vl:8b/bge-m3/MLX, frame caps)
+- [x] T003 [P] Create `tests/understanding/{unit,integration,e2e}/` with `conftest.py` adding `setup/understanding` to `sys.path`; register `integration` + `e2e` pytest markers (opt-in) in repo pytest config
+- [x] T004 Write `setup/understanding/setup.sh` (idempotent): `ollama pull qwen3-vl:8b` + `ollama pull bge-m3`; `pip install --break-system-packages` (python3.13) `mlx-vlm scenedetect`; ensure `ffmpeg`; cache MLX model; document `python3.13` + Ollama-runner gotchas (ref `setup/local-agent/SETUP-NOTES.md`)
 
 ---
 
@@ -29,14 +29,14 @@
 
 **The index core, captioner interface, and embedder are written here because every story writes to/through them.**
 
-- [ ] T005 Write failing unit tests for status model in `tests/understanding/unit/test_status.py` (enum values; valid transitions pending→done/no_preview/error; error/no_preview→pending via retry)
-- [ ] T006 Implement `setup/understanding/index/status.py` to pass T005
-- [ ] T007 Write failing unit tests for the index in `tests/understanding/unit/test_db.py` (real temp-dir SQLite, WAL; `open_db` migrate; `upsert_asset`/`upsert_segments`; `plan` incremental selection by pending + changed `source_hash` + `schema_ver<current`; `set_status`; `counts`; FTS5 sync via triggers; vector store + brute-force cosine `search`; `backup` copies file)
-- [ ] T008 Implement `setup/understanding/index/db.py` (schema: `assets`, `video_segments`, `assets_fts`, `runs`; WAL; functions per `contracts/captioner.md` Index API) to pass T007
-- [ ] T009 [P] Write failing unit tests for the captioner contract in `tests/understanding/unit/test_base.py` (CaptionResult shape; `REQUIRED_MODELS` map for photo/video)
-- [ ] T010 [P] Implement `setup/understanding/caption/base.py` (CaptionResult, captioner protocol, `REQUIRED_MODELS`) to pass T009
-- [ ] T011 [P] Write failing unit tests for the embedder in `tests/understanding/unit/test_embed.py` (`embed`/`embed_query` return a serialized vector; injectable Ollama client mocked)
-- [ ] T012 [P] Implement `setup/understanding/caption/embed.py` (multilingual `bge-m3` via Ollama embeddings; injectable client) to pass T011
+- [x] T005 Write failing unit tests for status model in `tests/understanding/unit/test_status.py` (enum values; valid transitions pending→done/no_preview/error; error/no_preview→pending via retry)
+- [x] T006 Implement `setup/understanding/index/status.py` to pass T005
+- [x] T007 Write failing unit tests for the index in `tests/understanding/unit/test_db.py` (real temp-dir SQLite, WAL; `open_db` migrate; `upsert_asset`/`upsert_segments`; `plan` incremental selection by pending + changed `source_hash` + `schema_ver<current`; `set_status`; `counts`; FTS5 sync via triggers; vector store + brute-force cosine `search`; `backup` copies file)
+- [x] T008 Implement `setup/understanding/index/db.py` (schema: `assets`, `video_segments`, `assets_fts`, `runs`; WAL; functions per `contracts/captioner.md` Index API) to pass T007
+- [x] T009 [P] Write failing unit tests for the captioner contract in `tests/understanding/unit/test_base.py` (CaptionResult shape; `REQUIRED_MODELS` map for photo/video)
+- [x] T010 [P] Implement `setup/understanding/caption/base.py` (CaptionResult, captioner protocol, `REQUIRED_MODELS`) to pass T009
+- [x] T011 [P] Write failing unit tests for the embedder in `tests/understanding/unit/test_embed.py` (`embed`/`embed_query` return a serialized vector; injectable Ollama client mocked)
+- [x] T012 [P] Implement `setup/understanding/caption/embed.py` (multilingual `bge-m3` via Ollama embeddings; injectable client) to pass T011
 
 **Checkpoint**: index + interfaces + embedder exist and are unit-green. No story logic yet.
 
@@ -49,17 +49,17 @@
 
 ### Tests (write first, confirm failing)
 
-- [ ] T013 [P] [US1] Failing unit tests for the photo fetcher in `tests/understanding/unit/test_fetch_immich_photo.py` (list assets; download preview to staging; **missing preview → `no_preview`**; capture `source_hash` + cached Immich fields) with mocked Immich
-- [ ] T014 [P] [US1] Failing unit tests for the photo captioner in `tests/understanding/unit/test_photo_ollama.py` (preview → CaptionResult; English caption; OCR; model errors → typed exception, never crash; **privacy invariant (FR-007): CaptionResult exposes no person-identity field and the captioner derives no named-person data — `person_ids` come only from cached Immich fields, never from the caption path**) with a mock model
-- [ ] T015 [P] [US1] Failing unit tests for the photo run orchestration in `tests/understanding/unit/test_cli_run_photo.py` (chunking to staging budget; incremental skip of `done`; per-asset error isolation; DB backup at end) with mocks
-- [ ] T016 [US1] Failing e2e test in `tests/understanding/e2e/test_photo_e2e.py` (tiny photo fixture → `run --type photo` → rows `done` with caption + embedding; FTS query **and** vector query each return the expected asset; **cross-language: a RU or UK query for a concept whose stored caption is English returns the expected asset via the semantic path** — covers SC-003 / US1-AC3; this case needs a real `bge-m3` embedding, so if T016 otherwise mocks the embedder, place the cross-language assertion in `tests/understanding/integration/test_crosslang.py` under the opt-in marker to keep the unit/e2e suite mock-only and <60s)
+- [x] T013 [P] [US1] Failing unit tests for the photo fetcher in `tests/understanding/unit/test_fetch_immich_photo.py` (list assets; download preview to staging; **missing preview → `no_preview`**; capture `source_hash` + cached Immich fields) with mocked Immich
+- [x] T014 [P] [US1] Failing unit tests for the photo captioner in `tests/understanding/unit/test_photo_ollama.py` (preview → CaptionResult; English caption; OCR; model errors → typed exception, never crash; **privacy invariant (FR-007): CaptionResult exposes no person-identity field and the captioner derives no named-person data — `person_ids` come only from cached Immich fields, never from the caption path**) with a mock model
+- [x] T015 [P] [US1] Failing unit tests for the photo run orchestration in `tests/understanding/unit/test_cli_run_photo.py` (chunking to staging budget; incremental skip of `done`; per-asset error isolation; DB backup at end) with mocks
+- [x] T016 [US1] Failing e2e test in `tests/understanding/e2e/test_photo_e2e.py` (tiny photo fixture → `run --type photo` → rows `done` with caption + embedding; FTS query **and** vector query each return the expected asset; **cross-language: a RU or UK query for a concept whose stored caption is English returns the expected asset via the semantic path** — covers SC-003 / US1-AC3; this case needs a real `bge-m3` embedding, so if T016 otherwise mocks the embedder, place the cross-language assertion in `tests/understanding/integration/test_crosslang.py` under the opt-in marker to keep the unit/e2e suite mock-only and <60s)
 
 ### Implementation
 
-- [ ] T017 [US1] Implement `setup/understanding/fetch/immich.py` photo path (list assets, download preview, missing-preview detection, `source_hash`, cached fields) to pass T013
-- [ ] T018 [US1] Implement `setup/understanding/caption/photo_ollama.py` (Ollama `qwen3-vl:8b`; structured English caption+OCR prompt that **does not ask for / does not return named-person identification — FR-007**; OCR dedupe; embed via `embed.py`) to pass T014
-- [ ] T019 [US1] Implement `setup/understanding/index_cli.py` `run --type photo` (chunked fetch→caption→embed→write→cleanup; incremental; per-asset error isolation; DB backup) + `status` command, to pass T015
-- [ ] T020 [US1] Implement `index_cli.py` `search "<query>"` (smoke hybrid FTS ∪ vector; multilingual query embed so a non-English query matches an English caption without translation — FR-004) to pass T016, **including its cross-language case**
+- [x] T017 [US1] Implement `setup/understanding/fetch/immich.py` photo path (list assets, download preview, missing-preview detection, `source_hash`, cached fields) to pass T013
+- [x] T018 [US1] Implement `setup/understanding/caption/photo_ollama.py` (Ollama `qwen3-vl:8b`; structured English caption+OCR prompt that **does not ask for / does not return named-person identification — FR-007**; OCR dedupe; embed via `embed.py`) to pass T014
+- [x] T019 [US1] Implement `setup/understanding/index_cli.py` `run --type photo` (chunked fetch→caption→embed→write→cleanup; incremental; per-asset error isolation; DB backup) + `status` command, to pass T015
+- [x] T020 [US1] Implement `index_cli.py` `search "<query>"` (smoke hybrid FTS ∪ vector; multilingual query embed so a non-English query matches an English caption without translation — FR-004) to pass T016, **including its cross-language case**
 
 **Checkpoint**: US1 = shippable MVP (photo concept/text/cross-language search the archive never had).
 

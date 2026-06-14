@@ -378,6 +378,28 @@ def search(
     return ranked[:k]
 
 
+def index_state(conn: sqlite3.Connection) -> dict:
+    """Return a lightweight snapshot of all indexed assets for reconciliation.
+
+    Returns a dict keyed by asset_id, each value a dict with:
+        {'source_hash': str|None, 'status': str, 'schema_ver': int|None}
+
+    This is a read-only helper used by the run orchestrator to detect which
+    assets are new, changed, or already up-to-date without pulling full rows.
+    """
+    cur = conn.execute(
+        "SELECT asset_id, source_hash, status, schema_ver FROM assets"
+    )
+    return {
+        row["asset_id"]: {
+            "source_hash": row["source_hash"],
+            "status": row["status"],
+            "schema_ver": row["schema_ver"],
+        }
+        for row in cur.fetchall()
+    }
+
+
 def backup(conn: sqlite3.Connection, dest_dir: str) -> str:
     """Copy the DB file into *dest_dir* using SQLite's backup API.
 

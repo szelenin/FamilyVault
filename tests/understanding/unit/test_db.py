@@ -13,6 +13,7 @@ import pytest
 from index.db import (
     backup,
     counts,
+    index_state,
     open_db,
     plan,
     search,
@@ -580,6 +581,63 @@ def test_backup_copies_db_file(tmp_path):
     dest_dir.mkdir()
     dest_path = backup(conn, str(dest_dir))
     assert os.path.isfile(dest_path)
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# index_state (reconciliation helper)
+# ---------------------------------------------------------------------------
+
+
+def test_index_state_empty_db(tmp_path):
+    """index_state on an empty DB must return an empty dict."""
+    conn = open_db(tmp_path / "test.db")
+    state = index_state(conn)
+    assert state == {}
+    conn.close()
+
+
+def test_index_state_returns_all_assets(tmp_path):
+    """index_state must include every asset in the DB."""
+    conn = open_db(tmp_path / "test.db")
+    upsert_asset(conn, _make_asset("a1", status="pending", source_hash="h1"))
+    upsert_asset(conn, _make_asset("a2", status="done", source_hash="h2"))
+    state = index_state(conn)
+    assert set(state.keys()) == {"a1", "a2"}
+    conn.close()
+
+
+def test_index_state_correct_fields(tmp_path):
+    """index_state must return source_hash, status, and schema_ver for each asset."""
+    conn = open_db(tmp_path / "test.db")
+    upsert_asset(conn, _make_asset("a1", status="done", source_hash="hashX", schema_ver=1))
+    state = index_state(conn)
+    assert "a1" in state
+    entry = state["a1"]
+    assert entry["source_hash"] == "hashX"
+    assert entry["status"] == "done"
+    assert entry["schema_ver"] == 1
+    conn.close()
+
+
+def test_index_state_reflects_status_update(tmp_path):
+    """index_state must return the current status after set_status."""
+    conn = open_db(tmp_path / "test.db")
+    upsert_asset(conn, _make_asset("a1", status="pending"))
+    set_status(conn, "a1", Status.DONE)
+    state = index_state(conn)
+    assert state["a1"]["status"] == "done"
+    conn.close()
+
+
+def test_index_state_none_source_hash(tmp_path):
+    """index_state returns None for source_hash when none was stored."""
+    conn = open_db(tmp_path / "test.db")
+    row = _make_asset("a1")
+    row["source_hash"] = None
+    upsert_asset(conn, row)
+    state = index_state(conn)
+    assert state["a1"]["source_hash"] is None
     conn.close()
 
 
