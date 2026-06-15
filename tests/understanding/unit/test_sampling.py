@@ -248,3 +248,57 @@ class TestEnvOverride:
         scenes = [(i * 2.0, (i + 1) * 2.0) for i in range(30)]
         plan = plan_frames(scenes, duration=60.0, frame_max=10)
         assert len(plan.caption_frames) <= 10
+
+
+# ---------------------------------------------------------------------------
+# Regression: detect_scenes must use the VideoStream's public .duration, NOT
+# the removed-in-0.7 .cap attribute. These drive detect_scenes against a fake
+# scenedetect whose video has NO .cap — re-introducing video.cap fails here.
+# ---------------------------------------------------------------------------
+
+class _FakeTC:
+    def __init__(self, s):
+        self._s = s
+
+    @property
+    def seconds(self):
+        return self._s
+
+
+class _FakeVideoNoCap:
+    """Mimics a 0.7 VideoStream: has .duration, deliberately NO .cap."""
+    duration = _FakeTC(12.0)
+
+
+def _patch_scenedetect(monkeypatch, scene_list):
+    import pytest
+    scenedetect = pytest.importorskip("scenedetect")
+    import scenedetect.detectors as _det
+
+    class _FakeSM:
+        def add_detector(self, d):
+            pass
+
+        def detect_scenes(self, video, show_progress=False):
+            pass
+
+        def get_scene_list(self):
+            return scene_list
+
+    monkeypatch.setattr(scenedetect, "open_video", lambda p: _FakeVideoNoCap())
+    monkeypatch.setattr(scenedetect, "SceneManager", lambda: _FakeSM())
+    monkeypatch.setattr(_det, "AdaptiveDetector", lambda *a, **k: object())
+
+
+class TestDetectScenesApi:
+    def test_no_cuts_uses_duration_not_cap(self, monkeypatch):
+        from fetch import sampling
+        _patch_scenedetect(monkeypatch, scene_list=[])
+        # _FakeVideoNoCap has no .cap → if detect_scenes touches it, AttributeError.
+        assert sampling.detect_scenes("/x.mp4") == [(0.0, 12.0)]
+
+    def test_with_cuts_returns_scene_bounds_in_seconds(self, monkeypatch):
+        from fetch import sampling
+        scenes = [(_FakeTC(0.0), _FakeTC(4.0)), (_FakeTC(4.0), _FakeTC(10.0))]
+        _patch_scenedetect(monkeypatch, scene_list=scenes)
+        assert sampling.detect_scenes("/x.mp4") == [(0.0, 4.0), (4.0, 10.0)]

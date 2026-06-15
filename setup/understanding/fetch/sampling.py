@@ -241,6 +241,15 @@ def _build_ocr(
 # Thin PySceneDetect wrapper (lazy import — NOT used by unit tests)
 # ---------------------------------------------------------------------------
 
+def _tc_seconds(timecode) -> float:
+    """Seconds from a PySceneDetect FrameTimecode, across versions.
+
+    0.7 exposes a `.seconds` property (and deprecates `.get_seconds()`).
+    """
+    val = getattr(timecode, "seconds", None)
+    return float(val) if val is not None else float(timecode.get_seconds())
+
+
 def detect_scenes(video_path: str) -> list[tuple[float, float]]:
     """Detect scenes in a video file using PySceneDetect.
 
@@ -261,14 +270,9 @@ def detect_scenes(video_path: str) -> list[tuple[float, float]]:
 
     scene_list = scene_manager.get_scene_list()
     if not scene_list:
-        # No cuts detected → return single scene spanning whole clip
-        cap = video.cap
-        total_frames = int(cap.get(7))  # cv2.CAP_PROP_FRAME_COUNT
-        fps = cap.get(5)  # cv2.CAP_PROP_FPS
-        duration = total_frames / fps if fps > 0 else 0.0
+        # No cuts detected → single scene spanning the whole clip. Use the
+        # VideoStream's public duration (PySceneDetect 0.7 removed `.cap`).
+        duration = _tc_seconds(video.duration) if getattr(video, "duration", None) else 0.0
         return [(0.0, duration)]
 
-    return [
-        (scene[0].get_seconds(), scene[1].get_seconds())
-        for scene in scene_list
-    ]
+    return [(_tc_seconds(scene[0]), _tc_seconds(scene[1])) for scene in scene_list]

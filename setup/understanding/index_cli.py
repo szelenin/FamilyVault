@@ -447,14 +447,21 @@ def run_videos(
 
                     frames_dir.mkdir(parents=True, exist_ok=True)
                     chunk_staged.append(frames_dir)
+                    # Clamp seek times just inside the clip: ffmpeg cannot seek to
+                    # exactly the duration (no frame there) and writes nothing.
+                    end_cap = max(0.0, duration - 0.1)
+                    seek_times = sorted({min(t, end_cap) for t in splan.caption_frames})
                     extra = {"runner": runner} if runner is not None else {}
-                    frames = extract_frames_fn(
-                        vpath, splan.caption_frames, str(frames_dir), **extra
+                    raw_frames = extract_frames_fn(
+                        vpath, seek_times, str(frames_dir), **extra
                     )
+                    # Keep only frames ffmpeg actually wrote; the captioner derives
+                    # each frame's timestamp from its filename, so they stay aligned.
+                    frames = [p for p in raw_frames if os.path.exists(p)]
+                    if not frames:
+                        raise RuntimeError("no frames could be extracted from the video")
 
-                    cr = captioner.caption(
-                        frames, is_video=True, frame_times=splan.caption_frames
-                    )
+                    cr = captioner.caption(frames, is_video=True)
                     emb = embed_fn(cr.caption)
 
                     row = dict(fields)
