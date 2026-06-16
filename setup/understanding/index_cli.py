@@ -30,11 +30,15 @@ from index.db import (
     CURRENT_SCHEMA_VER,
     backup,
     counts,
+    get_watermark,
     index_state,
     open_db,
+    pending_count,
     plan,
+    reset_watermark,
     search,
     set_status,
+    set_watermark,
     upsert_asset,
     upsert_segments,
 )
@@ -66,6 +70,8 @@ _DEFAULT_STAGING_DIR = os.environ.get(
 )
 
 _DEFAULT_CHUNK_SIZE = 50
+
+DISCOVERY_PENDING_FLOOR = int(os.environ.get("DISCOVERY_PENDING_FLOOR", str(_DEFAULT_CHUNK_SIZE)))
 
 # Per-phase memory need (GB) used by the governor to decide when to free RAM.
 PHOTO_NEED_GB = float(os.environ.get("PHOTO_NEED_GB", "9"))
@@ -192,6 +198,46 @@ def _reconcile(conn, fields: dict, stored: dict, schema_ver: int) -> None:
     # (also handles no_preview / error — they remain as-is for this pass)
 
 
+def _discover(conn, *, asset_type, list_fn, session, schema_ver, limit, full_scan):
+    """Discover new/changed assets into the index, then return the todo list.
+
+    Fast-path: if enough 'pending' work is already queued, skip the Immich scan.
+    Otherwise delta-scan via the updatedAfter watermark (full list when full_scan
+    or no watermark yet), reconcile each, and advance the watermark to the max
+    updatedAt seen — but only AFTER a complete pass, so an interrupted scan is
+    resumable (idempotent reconcile makes the re-query free).
+    """
+    need = limit if limit is not None else DISCOVERY_PENDING_FLOOR
+
+    if not full_scan and pending_count(conn, asset_type) >= need:
+        pass  # fast-path: enough queued; skip Immich discovery entirely
+    else:
+        if full_scan:
+            reset_watermark(conn, asset_type)
+            watermark = None
+        else:
+            watermark = get_watermark(conn, asset_type)
+
+        raw = list_fn(session, updated_after=watermark)
+
+        current_state = index_state(conn)
+        max_seen = watermark
+        for raw_asset in raw:
+            fields = asset_filter_fields(raw_asset)
+            _reconcile(conn, fields, current_state.get(fields["asset_id"]), schema_ver)
+            ts = raw_asset.get("updatedAt")
+            if ts is not None and (max_seen is None or ts > max_seen):
+                max_seen = ts
+
+        if max_seen is not None:
+            set_watermark(conn, asset_type, max_seen)
+
+    todo = plan(conn, type=asset_type, schema_ver=schema_ver)
+    if limit is not None:
+        todo = todo[:limit]
+    return todo
+
+
 # ---------------------------------------------------------------------------
 # run_photos
 # ---------------------------------------------------------------------------
@@ -212,6 +258,7 @@ def run_photos(
     memory_policy: str = "auto",
     need_gb: Optional[float] = None,
     clean_staging: bool = False,
+    full_scan: bool = False,
 ) -> dict:
     """Index all Immich photo assets using injected dependencies.
 
@@ -253,21 +300,10 @@ def run_photos(
         shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    # Step 1: List Immich assets
-    raw_assets = list_photo_assets(session)
-
-    # Step 2: Reconcile each asset against the index
-    current_state = index_state(conn)
-    for raw_asset in raw_assets:
-        fields = asset_filter_fields(raw_asset)
-        asset_id = fields["asset_id"]
-        stored = current_state.get(asset_id)
-        _reconcile(conn, fields, stored, schema_ver)
-
-    # Step 3: Get todo list, apply limit
-    todo = plan(conn, type="IMAGE", schema_ver=schema_ver)
-    if limit is not None:
-        todo = todo[:limit]
+    todo = _discover(
+        conn, asset_type="IMAGE", list_fn=list_photo_assets, session=session,
+        schema_ver=schema_ver, limit=limit, full_scan=full_scan,
+    )
 
     # Step 4: Process in chunks. Each chunk runs in two phases so the memory
     # governor can free RAM (incl. stopping Immich) for captioning WITHOUT
@@ -368,6 +404,7 @@ def run_videos(
     memory_policy: str = "auto",
     need_gb: Optional[float] = None,
     clean_staging: bool = False,
+    full_scan: bool = False,
 ) -> dict:
     """Index Immich VIDEO assets: sample frames → caption (video-level + segments)
     → embed → write asset row + video_segments.
@@ -392,15 +429,10 @@ def run_videos(
         shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    # Discover + reconcile (change detection) — same as photos.
-    current_state = index_state(conn)
-    for raw_asset in list_video_assets(session):
-        fields = asset_filter_fields(raw_asset)
-        _reconcile(conn, fields, current_state.get(fields["asset_id"]), schema_ver)
-
-    todo = plan(conn, type="VIDEO", schema_ver=schema_ver)
-    if limit is not None:
-        todo = todo[:limit]
+    todo = _discover(
+        conn, asset_type="VIDEO", list_fn=list_video_assets, session=session,
+        schema_ver=schema_ver, limit=limit, full_scan=full_scan,
+    )
 
     # Two-phase chunks (same rationale as run_photos): download with Immich up,
     # then govern + caption (Immich not needed for ffmpeg/scenedetect/MLX).
@@ -635,6 +667,11 @@ def main(argv=None) -> None:
         action="store_true",
         help="Wipe the staging dir before starting.",
     )
+    run_p.add_argument(
+        "--full-scan",
+        action="store_true",
+        help="Ignore the discovery watermark + fast-path; re-list all Immich assets.",
+    )
 
     # --- status ---
     sub.add_parser("status", help="Print index counts.")
@@ -673,6 +710,7 @@ def main(argv=None) -> None:
                 governor=MemoryGovernor(),
                 memory_policy=args.memory_policy,
                 clean_staging=args.clean_staging,
+                full_scan=args.full_scan,
             )
             print(
                 f"Run complete — done={result['done']} "

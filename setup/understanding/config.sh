@@ -30,10 +30,13 @@
 : "${FRAME_MAX:=20}"                # per-pass frame budget (map-reduce beyond this)
 : "${FRAMES_PER_SCENE:=2}"          # scene-detect frames per detected scene
 
+# --- Discovery (incremental) -------------------------------------------------
+: "${DISCOVERY_PENDING_FLOOR:=50}"  # skip the Immich scan when >= this many pending (no --limit)
+
 # --- Interpreter -------------------------------------------------------------
 : "${PYTHON:=/opt/homebrew/bin/python3.13}"
 
 export INDEX_DB INDEX_BACKUP_DIR IMMICH_URL IMMICH_API_KEY_FILE \
        STAGING_DIR STAGING_BUDGET MEMORY_POLICY OLLAMA_URL \
        PHOTO_CAPTION_MODEL EMBED_MODEL VIDEO_CAPTION_MODEL OLLAMA_NUM_CTX \
-       FRAME_MIN FRAME_MAX FRAMES_PER_SCENE PYTHON
+       FRAME_MIN FRAME_MAX FRAMES_PER_SCENE DISCOVERY_PENDING_FLOOR PYTHON
