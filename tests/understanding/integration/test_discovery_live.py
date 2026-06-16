@@ -22,7 +22,7 @@ def _session_or_skip():
     return s
 
 
-def test_updated_after_far_future_returns_empty(tmp_path):
+def test_updated_after_far_future_returns_empty():
     s = _session_or_skip()
     # Nothing is updated after the far future → empty delta (bounded, not full library).
     assets = list_photo_assets(s, updated_after="2099-01-01T00:00:00.000Z")

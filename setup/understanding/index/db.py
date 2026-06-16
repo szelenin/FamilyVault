@@ -406,7 +406,7 @@ def index_state(conn: sqlite3.Connection) -> dict:
     }
 
 
-def get_watermark(conn: sqlite3.Connection, asset_type: str):
+def get_watermark(conn: sqlite3.Connection, asset_type: str) -> str | None:
     """Return the stored discovery watermark (max updatedAt) for a type, or None."""
     row = conn.execute(
         "SELECT watermark FROM scan_state WHERE asset_type=?", (asset_type,)

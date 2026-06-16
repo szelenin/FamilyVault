@@ -43,7 +43,7 @@ def list_photo_assets(
     *,
     base_url: str = _DEFAULT_BASE_URL,
     page_size: int = _DEFAULT_PAGE_SIZE,
-    updated_after: str = None,
+    updated_after: str | None = None,
 ) -> list:
     """Return all IMAGE assets from Immich, paginating until exhausted.
 
@@ -88,7 +88,7 @@ def list_video_assets(
     *,
     base_url: str = _DEFAULT_BASE_URL,
     page_size: int = _DEFAULT_PAGE_SIZE,
-    updated_after: str = None,
+    updated_after: str | None = None,
 ) -> list:
     """Return all VIDEO assets from Immich, paginating until exhausted.
 
