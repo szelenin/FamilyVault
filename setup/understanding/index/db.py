@@ -91,6 +91,12 @@ _DDL_STATEMENTS = [
         counts_json TEXT
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS scan_state (
+        asset_type TEXT PRIMARY KEY,   -- 'IMAGE' | 'VIDEO'
+        watermark  TEXT                -- max updatedAt discovered (ISO 8601), or NULL
+    )
+    """,
     # FTS5 virtual table — standalone (no content= link).
     # We store asset_id as an UNINDEXED column so results can be filtered by it.
     # Sync is managed explicitly in upsert_asset and the asset-delete helper
@@ -398,6 +404,38 @@ def index_state(conn: sqlite3.Connection) -> dict:
         }
         for row in cur.fetchall()
     }
+
+
+def get_watermark(conn: sqlite3.Connection, asset_type: str):
+    """Return the stored discovery watermark (max updatedAt) for a type, or None."""
+    row = conn.execute(
+        "SELECT watermark FROM scan_state WHERE asset_type=?", (asset_type,)
+    ).fetchone()
+    return row["watermark"] if row else None
+
+
+def set_watermark(conn: sqlite3.Connection, asset_type: str, watermark: str) -> None:
+    """Upsert the discovery watermark for a type."""
+    conn.execute(
+        "INSERT INTO scan_state(asset_type, watermark) VALUES (?, ?) "
+        "ON CONFLICT(asset_type) DO UPDATE SET watermark=excluded.watermark",
+        (asset_type, watermark),
+    )
+    conn.commit()
+
+
+def reset_watermark(conn: sqlite3.Connection, asset_type: str) -> None:
+    """Clear the watermark for a type (forces a full scan next discovery)."""
+    conn.execute("DELETE FROM scan_state WHERE asset_type=?", (asset_type,))
+    conn.commit()
+
+
+def pending_count(conn: sqlite3.Connection, asset_type: str) -> int:
+    """Number of assets of *asset_type* currently in status 'pending'."""
+    row = conn.execute(
+        "SELECT COUNT(*) FROM assets WHERE status='pending' AND type=?", (asset_type,)
+    ).fetchone()
+    return row[0]
 
 
 def backup(conn: sqlite3.Connection, dest_dir: str) -> str:

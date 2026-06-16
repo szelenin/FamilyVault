@@ -654,3 +654,37 @@ def test_backup_copy_is_readable(tmp_path):
     assert row is not None
     assert row[0] == "backup test row"
     conn2.close()
+
+
+# ---------------------------------------------------------------------------
+# scan_state: watermark and pending_count
+# ---------------------------------------------------------------------------
+
+
+class TestScanStateAndPending:
+    def test_watermark_roundtrip(self, tmp_path):
+        from index.db import open_db, get_watermark, set_watermark
+        conn = open_db(str(tmp_path / "i.db"))
+        assert get_watermark(conn, "IMAGE") is None
+        set_watermark(conn, "IMAGE", "2026-06-16T00:00:00.000Z")
+        assert get_watermark(conn, "IMAGE") == "2026-06-16T00:00:00.000Z"
+        set_watermark(conn, "IMAGE", "2026-06-16T01:00:00.000Z")
+        assert get_watermark(conn, "IMAGE") == "2026-06-16T01:00:00.000Z"
+        assert get_watermark(conn, "VIDEO") is None
+
+    def test_reset_watermark(self, tmp_path):
+        from index.db import open_db, get_watermark, set_watermark, reset_watermark
+        conn = open_db(str(tmp_path / "i.db"))
+        set_watermark(conn, "VIDEO", "2026-06-16T00:00:00.000Z")
+        reset_watermark(conn, "VIDEO")
+        assert get_watermark(conn, "VIDEO") is None
+
+    def test_pending_count_by_type(self, tmp_path):
+        from index.db import open_db, upsert_asset, pending_count
+        conn = open_db(str(tmp_path / "i.db"))
+        upsert_asset(conn, {"asset_id": "p1", "type": "IMAGE", "status": "pending", "schema_ver": 1})
+        upsert_asset(conn, {"asset_id": "p2", "type": "IMAGE", "status": "pending", "schema_ver": 1})
+        upsert_asset(conn, {"asset_id": "d1", "type": "IMAGE", "status": "done", "schema_ver": 1})
+        upsert_asset(conn, {"asset_id": "v1", "type": "VIDEO", "status": "pending", "schema_ver": 1})
+        assert pending_count(conn, "IMAGE") == 2
+        assert pending_count(conn, "VIDEO") == 1
