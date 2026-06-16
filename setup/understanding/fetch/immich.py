@@ -43,6 +43,7 @@ def list_photo_assets(
     *,
     base_url: str = _DEFAULT_BASE_URL,
     page_size: int = _DEFAULT_PAGE_SIZE,
+    updated_after: str = None,
 ) -> list:
     """Return all IMAGE assets from Immich, paginating until exhausted.
 
@@ -50,6 +51,9 @@ def list_photo_assets(
         session: A requests.Session-like object with a .post() method.
         base_url: Immich base URL (without trailing slash).
         page_size: Number of assets to request per page.
+        updated_after: ISO-8601 timestamp string; when set, only assets updated
+            after this time are returned (delta scan).  When None, all assets
+            are returned (full scan).
 
     Returns:
         A flat list of raw Immich asset dicts (one per asset).
@@ -64,6 +68,8 @@ def list_photo_assets(
             "page": page,
             "size": page_size,
         }
+        if updated_after is not None:
+            body["updatedAfter"] = updated_after
         response = session.post(url, json=body)
         data = response.json()
         page_assets = data["assets"]["items"]
@@ -82,10 +88,19 @@ def list_video_assets(
     *,
     base_url: str = _DEFAULT_BASE_URL,
     page_size: int = _DEFAULT_PAGE_SIZE,
+    updated_after: str = None,
 ) -> list:
     """Return all VIDEO assets from Immich, paginating until exhausted.
 
     Mirrors list_photo_assets with type=VIDEO.
+
+    Args:
+        session: A requests.Session-like object with a .post() method.
+        base_url: Immich base URL (without trailing slash).
+        page_size: Number of assets to request per page.
+        updated_after: ISO-8601 timestamp string; when set, only assets updated
+            after this time are returned (delta scan).  When None, all assets
+            are returned (full scan).
     """
     url = f"{base_url}/api/search/metadata"
     assets: list = []
@@ -93,6 +108,8 @@ def list_video_assets(
 
     while True:
         body = {"type": "VIDEO", "page": page, "size": page_size}
+        if updated_after is not None:
+            body["updatedAfter"] = updated_after
         response = session.post(url, json=body)
         data = response.json()
         assets.extend(data["assets"]["items"])

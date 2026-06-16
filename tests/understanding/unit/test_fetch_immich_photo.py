@@ -311,3 +311,29 @@ class TestAssetFilterFields:
         }
         result = asset_filter_fields(_ASSET_PAGE1)
         assert required.issubset(result.keys())
+
+
+class TestListPhotoAssetsUpdatedAfter:
+    def _resp(self, items, next_page=None):
+        from unittest.mock import MagicMock
+        r = MagicMock()
+        r.json.return_value = {"assets": {"items": items, "nextPage": next_page}}
+        return r
+
+    def test_includes_updated_after_when_set(self):
+        from unittest.mock import MagicMock
+        from fetch.immich import list_photo_assets
+        s = MagicMock()
+        s.post.return_value = self._resp([], next_page=None)
+        list_photo_assets(s, base_url="http://x:2283", updated_after="2026-06-16T00:00:00.000Z")
+        _, kwargs = s.post.call_args
+        assert kwargs["json"]["updatedAfter"] == "2026-06-16T00:00:00.000Z"
+
+    def test_omits_updated_after_when_none(self):
+        from unittest.mock import MagicMock
+        from fetch.immich import list_photo_assets
+        s = MagicMock()
+        s.post.return_value = self._resp([], next_page=None)
+        list_photo_assets(s, base_url="http://x:2283")
+        _, kwargs = s.post.call_args
+        assert "updatedAfter" not in kwargs["json"]
