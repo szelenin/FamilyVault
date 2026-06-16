@@ -239,3 +239,72 @@ class TestRestore:
         gov.restore(state)
         # restore appended exactly the two start calls in dependency order
         assert rec.names()[-2:] == ["start_orbstack", "start_immich"]
+
+
+# ---------------------------------------------------------------------------
+# Regression: real default service commands must be correct for this host and
+# must NOT silently swallow failures (the original governor bug).
+# ---------------------------------------------------------------------------
+
+class TestDefaultServiceCommands:
+    def test_default_immich_compose_path_is_absolute_repo_path(self, monkeypatch):
+        import resources, os
+        monkeypatch.delenv("IMMICH_COMPOSE_FILE", raising=False)
+        p = resources._immich_compose_file()
+        assert os.path.isabs(p)
+        assert p.replace(os.sep, "/").endswith("setup/immich/docker-compose.yml")
+
+    def test_immich_compose_path_env_override(self, monkeypatch):
+        import resources
+        monkeypatch.setenv("IMMICH_COMPOSE_FILE", "/custom/dc.yml")
+        assert resources._immich_compose_file() == "/custom/dc.yml"
+
+    def test_stop_immich_uses_compose_file_and_check_true(self, monkeypatch):
+        import resources, subprocess
+        seen = {}
+        monkeypatch.setenv("IMMICH_COMPOSE_FILE", "/x/dc.yml")
+        monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
+        resources._default_stop_immich()
+        assert seen["cmd"] == ["docker", "compose", "-f", "/x/dc.yml", "stop"]
+        assert seen["kw"].get("check") is True
+
+    def test_stop_orbstack_uses_orb_binary_and_check_true(self, monkeypatch):
+        import resources, subprocess
+        seen = {}
+        monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
+        resources._default_stop_orbstack()
+        assert seen["cmd"] == ["orb", "stop"]
+        assert seen["kw"].get("check") is True
+
+    def test_start_orbstack_uses_orb_binary(self, monkeypatch):
+        import resources, subprocess
+        seen = {}
+        monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
+        resources._default_start_orbstack()
+        assert seen["cmd"] == ["orb", "start"]
+
+
+class TestEscalationFailureRestores:
+    def test_auto_restores_immich_when_orbstack_stop_fails(self):
+        import pytest
+        from resources import MemoryGovernor
+
+        events = []
+
+        def boom():
+            raise RuntimeError("orb missing")
+
+        gov = MemoryGovernor(
+            available_gb_fn=lambda: 1.0,                 # always low → full escalation
+            list_loaded_fn=lambda: [],
+            unload_fn=lambda m: None,
+            stop_immich_fn=lambda: events.append("stop_immich"),
+            start_immich_fn=lambda: events.append("start_immich"),
+            stop_orbstack_fn=boom,                       # fails after Immich stopped
+            start_orbstack_fn=lambda: events.append("start_orbstack"),
+        )
+        with pytest.raises(RuntimeError):
+            gov.free_for_phase({"ollama": []}, policy="auto", need_gb=10.0)
+        # Immich stopped then restored; OrbStack never successfully stopped → not started.
+        assert "stop_immich" in events and "start_immich" in events
+        assert "start_orbstack" not in events

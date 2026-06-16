@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 
 
 # ---------------------------------------------------------------------------
@@ -90,34 +91,49 @@ def _default_list_loaded() -> list[str]:
     return [m["name"] for m in data.get("models", [])]
 
 
-def _default_unload(model: str) -> None:
+def _run(cmd: list[str], *, check: bool = True) -> None:
+    """Run an external command. Service controls use check=True so a failure
+    surfaces (CalledProcessError) instead of being silently swallowed — the
+    original governor bug was believing a failed stop had succeeded."""
     import subprocess  # lazy
 
-    subprocess.run(["ollama", "stop", model], check=False)
+    subprocess.run(cmd, check=check)
+
+
+def _immich_compose_file() -> str:
+    """Absolute path to Immich's docker-compose.yml.
+
+    Override with IMMICH_COMPOSE_FILE; defaults to the repo's
+    setup/immich/docker-compose.yml resolved relative to this file (so it works
+    regardless of the current working directory — the old relative default did not).
+    """
+    env = os.environ.get("IMMICH_COMPOSE_FILE")
+    if env:
+        return env
+    here = os.path.dirname(os.path.abspath(__file__))  # setup/understanding
+    return os.path.normpath(os.path.join(here, "..", "immich", "docker-compose.yml"))
+
+
+def _default_unload(model: str) -> None:
+    # Best-effort (non-disruptive step); a failed unload isn't critical.
+    _run(["ollama", "stop", model], check=False)
 
 
 def _default_stop_immich() -> None:
-    import subprocess  # lazy
-
-    subprocess.run(["docker", "compose", "-f", "immich/docker-compose.yml", "stop"], check=False)
+    _run(["docker", "compose", "-f", _immich_compose_file(), "stop"])
 
 
 def _default_start_immich() -> None:
-    import subprocess  # lazy
-
-    subprocess.run(["docker", "compose", "-f", "immich/docker-compose.yml", "start"], check=False)
+    _run(["docker", "compose", "-f", _immich_compose_file(), "start"])
 
 
 def _default_stop_orbstack() -> None:
-    import subprocess  # lazy
-
-    subprocess.run(["orbstack", "stop"], check=False)
+    # OrbStack's CLI binary is `orb`; bare `orb stop` stops the whole service.
+    _run(["orb", "stop"])
 
 
 def _default_start_orbstack() -> None:
-    import subprocess  # lazy
-
-    subprocess.run(["orbstack", "start"], check=False)
+    _run(["orb", "start"])
 
 
 # ---------------------------------------------------------------------------
@@ -173,31 +189,40 @@ class MemoryGovernor:
         if self._available_gb() >= need_gb:
             return state
 
-        # (a) unload non-required ollama models, then re-measure.
-        state.unloaded_models = self._unload_non_required(required_models)
-        if self._available_gb() >= need_gb:
-            return state
+        # If any step fails, undo what we already did before propagating, so a
+        # failure never leaves Immich/OrbStack stopped.
+        try:
+            # (a) unload non-required ollama models, then re-measure.
+            state.unloaded_models = self._unload_non_required(required_models)
+            if self._available_gb() >= need_gb:
+                return state
 
-        # (b) stop Immich, then re-measure.
-        self._stop_immich()
-        state.immich_stopped = True
-        if self._available_gb() >= need_gb:
-            return state
+            # (b) stop Immich, then re-measure.
+            self._stop_immich()
+            state.immich_stopped = True
+            if self._available_gb() >= need_gb:
+                return state
 
-        # (c) stop OrbStack (last resort).
-        self._stop_orbstack()
-        state.orbstack_stopped = True
-        return state
+            # (c) stop OrbStack (last resort).
+            self._stop_orbstack()
+            state.orbstack_stopped = True
+            return state
+        except Exception:
+            self.restore(state)
+            raise
 
     def _free_force(self, required_models: dict) -> StoppedState:
-        unloaded = self._unload_non_required(required_models)
-        self._stop_immich()
-        self._stop_orbstack()
-        return StoppedState(
-            unloaded_models=unloaded,
-            immich_stopped=True,
-            orbstack_stopped=True,
-        )
+        state = StoppedState(unloaded_models=[], immich_stopped=False, orbstack_stopped=False)
+        try:
+            state.unloaded_models = self._unload_non_required(required_models)
+            self._stop_immich()
+            state.immich_stopped = True
+            self._stop_orbstack()
+            state.orbstack_stopped = True
+            return state
+        except Exception:
+            self.restore(state)
+            raise
 
     def _free_never(self, required_models: dict, need_gb: float) -> StoppedState:
         state = StoppedState(unloaded_models=[], immich_stopped=False, orbstack_stopped=False)
