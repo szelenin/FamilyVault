@@ -100,18 +100,21 @@ def _run(cmd: list[str], *, check: bool = True) -> None:
     subprocess.run(cmd, check=check)
 
 
-def _immich_compose_file() -> str:
-    """Absolute path to Immich's docker-compose.yml.
+def _immich_filter() -> str:
+    """Docker name filter selecting the Immich containers. Override with
+    IMMICH_CONTAINER_FILTER (default 'name=immich')."""
+    return os.environ.get("IMMICH_CONTAINER_FILTER", "name=immich")
 
-    Override with IMMICH_COMPOSE_FILE; defaults to the repo's
-    setup/immich/docker-compose.yml resolved relative to this file (so it works
-    regardless of the current working directory — the old relative default did not).
-    """
-    env = os.environ.get("IMMICH_COMPOSE_FILE")
-    if env:
-        return env
-    here = os.path.dirname(os.path.abspath(__file__))  # setup/understanding
-    return os.path.normpath(os.path.join(here, "..", "immich", "docker-compose.yml"))
+
+def _docker_container_ids(name_filter: str, *, include_stopped: bool) -> list[str]:
+    import subprocess  # lazy
+
+    flag = "-aq" if include_stopped else "-q"
+    out = subprocess.run(
+        ["docker", "ps", flag, "--filter", name_filter],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return out.split()
 
 
 def _default_unload(model: str) -> None:
@@ -120,11 +123,17 @@ def _default_unload(model: str) -> None:
 
 
 def _default_stop_immich() -> None:
-    _run(["docker", "compose", "-f", _immich_compose_file(), "stop"])
+    # Stop the running Immich containers directly — robust to compose/.env quirks
+    # (a compose stop re-resolves the whole config, which needs Immich's env vars).
+    ids = _docker_container_ids(_immich_filter(), include_stopped=False)
+    if ids:
+        _run(["docker", "stop", *ids])
 
 
 def _default_start_immich() -> None:
-    _run(["docker", "compose", "-f", _immich_compose_file(), "start"])
+    ids = _docker_container_ids(_immich_filter(), include_stopped=True)
+    if ids:
+        _run(["docker", "start", *ids])
 
 
 def _default_stop_orbstack() -> None:

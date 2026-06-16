@@ -247,26 +247,48 @@ class TestRestore:
 # ---------------------------------------------------------------------------
 
 class TestDefaultServiceCommands:
-    def test_default_immich_compose_path_is_absolute_repo_path(self, monkeypatch):
-        import resources, os
-        monkeypatch.delenv("IMMICH_COMPOSE_FILE", raising=False)
-        p = resources._immich_compose_file()
-        assert os.path.isabs(p)
-        assert p.replace(os.sep, "/").endswith("setup/immich/docker-compose.yml")
-
-    def test_immich_compose_path_env_override(self, monkeypatch):
+    def test_immich_container_filter_default_and_override(self, monkeypatch):
         import resources
-        monkeypatch.setenv("IMMICH_COMPOSE_FILE", "/custom/dc.yml")
-        assert resources._immich_compose_file() == "/custom/dc.yml"
+        monkeypatch.delenv("IMMICH_CONTAINER_FILTER", raising=False)
+        assert resources._immich_filter() == "name=immich"
+        monkeypatch.setenv("IMMICH_CONTAINER_FILTER", "name=myimmich")
+        assert resources._immich_filter() == "name=myimmich"
 
-    def test_stop_immich_uses_compose_file_and_check_true(self, monkeypatch):
+    def test_stop_immich_stops_running_containers_by_name(self, monkeypatch):
         import resources, subprocess
-        seen = {}
-        monkeypatch.setenv("IMMICH_COMPOSE_FILE", "/x/dc.yml")
-        monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: seen.update(cmd=cmd, kw=kw))
+        calls = []
+
+        class CP:
+            def __init__(self, stdout=""):
+                self.stdout = stdout
+
+        def fake_run(cmd, **kw):
+            calls.append((cmd, kw))
+            return CP(stdout="c1\nc2\n") if cmd[:2] == ["docker", "ps"] else CP()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
         resources._default_stop_immich()
-        assert seen["cmd"] == ["docker", "compose", "-f", "/x/dc.yml", "stop"]
-        assert seen["kw"].get("check") is True
+        assert calls[0][0][:3] == ["docker", "ps", "-q"]      # list running immich
+        assert "name=immich" in calls[0][0]
+        assert calls[1][0] == ["docker", "stop", "c1", "c2"]  # stop them
+        assert calls[1][1].get("check") is True
+
+    def test_start_immich_starts_all_immich_containers(self, monkeypatch):
+        import resources, subprocess
+        calls = []
+
+        class CP:
+            def __init__(self, stdout=""):
+                self.stdout = stdout
+
+        def fake_run(cmd, **kw):
+            calls.append((cmd, kw))
+            return CP(stdout="c1\n") if cmd[:2] == ["docker", "ps"] else CP()
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        resources._default_start_immich()
+        assert calls[0][0][:3] == ["docker", "ps", "-aq"]     # includes stopped
+        assert calls[1][0] == ["docker", "start", "c1"]
 
     def test_stop_orbstack_uses_orb_binary_and_check_true(self, monkeypatch):
         import resources, subprocess
