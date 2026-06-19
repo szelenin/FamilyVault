@@ -438,6 +438,30 @@ def pending_count(conn: sqlite3.Connection, asset_type: str) -> int:
     return row[0]
 
 
+def asset_ids_by_status(conn: sqlite3.Connection, status: str) -> list:
+    """Return asset_ids currently in *status*, ordered by asset_id."""
+    rows = conn.execute(
+        "SELECT asset_id FROM assets WHERE status=? ORDER BY asset_id", (status,)
+    ).fetchall()
+    return [r["asset_id"] for r in rows]
+
+
+def requeue(conn: sqlite3.Connection, statuses: list) -> int:
+    """Reset all assets in any of *statuses* back to 'pending' (clearing error).
+
+    Returns the number of rows changed.
+    """
+    if not statuses:
+        return 0
+    placeholders = ",".join("?" * len(statuses))
+    cur = conn.execute(
+        f"UPDATE assets SET status='pending', error=NULL WHERE status IN ({placeholders})",
+        list(statuses),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def backup(conn: sqlite3.Connection, dest_dir: str) -> str:
     """Copy the DB file into *dest_dir* using SQLite's backup API.
 

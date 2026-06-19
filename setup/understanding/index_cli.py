@@ -28,6 +28,7 @@ import shutil
 
 from index.db import (
     CURRENT_SCHEMA_VER,
+    asset_ids_by_status,
     backup,
     counts,
     get_watermark,
@@ -35,6 +36,7 @@ from index.db import (
     open_db,
     pending_count,
     plan,
+    requeue,
     reset_watermark,
     search,
     set_status,
@@ -42,6 +44,7 @@ from index.db import (
     upsert_asset,
     upsert_segments,
 )
+from preflight import run_doctor, doctor_ok
 from index.status import Status
 from fetch.immich import (
     asset_filter_fields,
@@ -534,6 +537,40 @@ def run_videos(
 
 
 # ---------------------------------------------------------------------------
+# report
+# ---------------------------------------------------------------------------
+
+
+def report(conn) -> list:
+    """List no_preview assets + remediation steps; return their ids."""
+    ids = asset_ids_by_status(conn, "no_preview")
+    if not ids:
+        print("No assets are missing a preview.")
+        return ids
+    print(f"{len(ids)} asset(s) have no usable preview:")
+    for aid in ids:
+        print(f"  {aid}")
+    print("\nRemediation:")
+    print("  1. In Immich: Administration -> Jobs -> 'Generate Thumbnails' -> run for Missing assets")
+    print("     (or via API: POST /api/jobs  {\"name\":\"thumbnailGeneration\",\"command\":\"start\"}).")
+    print("  2. Then: index_cli.py retry --status no_preview")
+    print("  3. Then re-run: index_cli.py run --type <photo|video>")
+    return ids
+
+
+# ---------------------------------------------------------------------------
+# retry
+# ---------------------------------------------------------------------------
+
+
+def retry(conn, statuses: list) -> int:
+    """Re-queue assets in the given statuses back to 'pending'. Returns count."""
+    n = requeue(conn, statuses)
+    print(f"Re-queued {n} asset(s) to pending: {', '.join(statuses)}")
+    return n
+
+
+# ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
 
@@ -686,6 +723,18 @@ def main(argv=None) -> None:
         help="Max results to return (default: %(default)s).",
     )
 
+    # --- report ---
+    sub.add_parser("report", help="List assets missing a preview + remediation.")
+
+    # --- retry ---
+    retry_p = sub.add_parser("retry", help="Re-queue no_preview/error assets to pending.")
+    retry_p.add_argument(
+        "--status",
+        choices=["no_preview", "error"],
+        action="append",
+        help="Status to re-queue (repeatable). Default: both.",
+    )
+
     args = parser.parse_args(argv)
 
     # Open DB
@@ -699,6 +748,13 @@ def main(argv=None) -> None:
 
     try:
         if args.command == "run":
+            checks = run_doctor(args.asset_type)
+            failed = [c for c in checks if not c.ok]
+            if failed:
+                print("Preflight failed — fix these before running:", file=sys.stderr)
+                for c in failed:
+                    print(f"  [{c.name}] {c.fix}", file=sys.stderr)
+                sys.exit(3)
             run_fn = run_photos if args.asset_type == "photo" else run_videos
             result = run_fn(
                 conn,
@@ -731,6 +787,15 @@ def main(argv=None) -> None:
         elif args.command == "search":
             hits = search_index(conn, args.query, k=args.k)
             sys.exit(0 if hits else 2)
+
+        elif args.command == "report":
+            ids = report(conn)
+            sys.exit(0 if ids else 2)
+
+        elif args.command == "retry":
+            statuses = args.status or ["no_preview", "error"]
+            retry(conn, statuses)
+            sys.exit(0)
 
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
