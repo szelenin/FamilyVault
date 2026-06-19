@@ -32,6 +32,20 @@ REQUIRED_MODELS: dict[str, dict[str, list[str]]] = {
 }
 
 
+def model_present(required: str, installed) -> bool:
+    """Whether an Ollama model *required* is satisfied by the *installed* names.
+
+    Ollama reports names with a tag (e.g. ``bge-m3:latest``). A bare required
+    name (no ``:tag``) matches any tag of that model; a tagged required name
+    must match exactly.
+    """
+    if required in installed:
+        return True
+    if ":" in required:
+        return False
+    return any(m.split(":", 1)[0] == required for m in installed)
+
+
 # ---------------------------------------------------------------------------
 # CaptionResult
 # ---------------------------------------------------------------------------

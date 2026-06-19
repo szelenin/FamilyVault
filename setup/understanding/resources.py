@@ -27,6 +27,8 @@ import dataclasses
 import json
 import os
 
+from caption.base import model_present
+
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -62,12 +64,11 @@ def models_to_unload(loaded: list[str], required_ollama: list[str]) -> list[str]
     """Return the currently-loaded Ollama models that are NOT required by the
     current phase, preserving `loaded` order.
 
-    Matching is case-sensitive and exact. This is how the governor keeps only
-    the current phase's models resident — anything loaded but not required is a
-    candidate to unload.
+    Matching uses tag-normalized comparison via model_present(): a loaded model
+    `bge-m3:latest` is considered required if `bge-m3` appears in required_ollama.
+    Anything loaded but not required is a candidate to unload.
     """
-    required = set(required_ollama)
-    return [m for m in loaded if m not in required]
+    return [m for m in loaded if not any(model_present(r, [m]) for r in required_ollama)]
 
 
 # ---------------------------------------------------------------------------

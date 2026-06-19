@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from caption.base import REQUIRED_MODELS
+from caption.base import REQUIRED_MODELS, model_present
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +78,7 @@ def _ollama_check(asset_type: str, env: DoctorEnv) -> Check:
     except Exception:
         return Check("ollama", ok=False, fix="Start Ollama: `ollama serve`")
 
-    installed_set = set(installed)
-    missing = [m for m in required if m not in installed_set]
+    missing = [m for m in required if not model_present(m, installed)]
     if missing:
         fixes = "; ".join(f"ollama pull {m}" for m in missing)
         return Check("ollama", ok=False, fix=fixes)

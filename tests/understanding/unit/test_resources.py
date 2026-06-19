@@ -83,6 +83,35 @@ PHOTO = REQUIRED_MODELS["photo"]
 
 
 # ---------------------------------------------------------------------------
+# models_to_unload — tag normalization
+# ---------------------------------------------------------------------------
+
+class TestModelsToUnload:
+    def test_exact_match_kept(self):
+        from resources import models_to_unload
+        assert models_to_unload(["bge-m3"], ["bge-m3"]) == []
+
+    def test_tagged_name_matches_bare_required(self):
+        # Ollama reports "bge-m3:latest"; REQUIRED_MODELS has "bge-m3".
+        from resources import models_to_unload
+        assert models_to_unload(["bge-m3:latest"], ["bge-m3"]) == []
+
+    def test_non_required_tagged_model_is_unloaded(self):
+        from resources import models_to_unload
+        result = models_to_unload(["bge-m3:latest", "extra:latest"], ["bge-m3"])
+        assert result == ["extra:latest"]
+
+    def test_empty_loaded_returns_empty(self):
+        from resources import models_to_unload
+        assert models_to_unload([], ["bge-m3"]) == []
+
+    def test_all_non_required_returned(self):
+        from resources import models_to_unload
+        result = models_to_unload(["llama3:latest", "mistral:7b"], ["bge-m3"])
+        assert result == ["llama3:latest", "mistral:7b"]
+
+
+# ---------------------------------------------------------------------------
 # StoppedState shape
 # ---------------------------------------------------------------------------
 
