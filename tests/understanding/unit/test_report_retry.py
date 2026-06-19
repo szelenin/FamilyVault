@@ -57,3 +57,31 @@ def test_run_blocks_when_doctor_fails(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         index_cli.main(["--db", str(tmp_path / "i.db"), "run", "--type", "photo"])
     assert exc.value.code == 3                        # fail-fast before heavy work
+
+
+def test_report_auto_regenerate_triggers_immich_job(tmp_path):
+    from unittest.mock import MagicMock
+    conn = open_db(str(tmp_path / "i.db"))
+    upsert_asset(conn, {"asset_id": "np1", "type": "IMAGE", "status": "no_preview", "schema_ver": 1})
+    s = MagicMock()
+    ids = index_cli.report(conn, auto_regenerate=True, session=s, base_url="http://x:2283")
+    assert ids == ["np1"]
+    s.put.assert_called_once()
+    url, = s.put.call_args[0]
+    assert url == "http://x:2283/api/jobs/thumbnailGeneration"
+    assert s.put.call_args.kwargs["json"]["command"] == "start"
+
+def test_report_no_autoregen_makes_no_network_call(tmp_path):
+    from unittest.mock import MagicMock
+    conn = open_db(str(tmp_path / "i.db"))
+    upsert_asset(conn, {"asset_id": "np1", "type": "IMAGE", "status": "no_preview", "schema_ver": 1})
+    s = MagicMock()
+    index_cli.report(conn, auto_regenerate=False, session=s)
+    s.put.assert_not_called()
+
+def test_report_autoregen_skipped_when_no_missing(tmp_path):
+    from unittest.mock import MagicMock
+    conn = open_db(str(tmp_path / "i.db"))
+    s = MagicMock()
+    assert index_cli.report(conn, auto_regenerate=True, session=s) == []
+    s.put.assert_not_called()    # nothing to regenerate

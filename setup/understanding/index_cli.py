@@ -541,7 +541,16 @@ def run_videos(
 # ---------------------------------------------------------------------------
 
 
-def report(conn) -> list:
+def _trigger_thumbnail_regen(session=None, base_url=None):
+    """Ask Immich to (re)generate thumbnails for missing assets. Best-effort."""
+    if session is None:
+        session = _lazy_session()
+    base_url = base_url or os.environ.get("IMMICH_URL", "http://localhost:2283")
+    session.put(f"{base_url}/api/jobs/thumbnailGeneration",
+                json={"command": "start", "force": False})
+
+
+def report(conn, *, auto_regenerate=False, session=None, base_url=None) -> list:
     """List no_preview assets + remediation steps; return their ids."""
     ids = asset_ids_by_status(conn, "no_preview")
     if not ids:
@@ -555,6 +564,10 @@ def report(conn) -> list:
     print("     (or via API: POST /api/jobs  {\"name\":\"thumbnailGeneration\",\"command\":\"start\"}).")
     print("  2. Then: index_cli.py retry --status no_preview")
     print("  3. Then re-run: index_cli.py run --type <photo|video>")
+    if ids and auto_regenerate:
+        _trigger_thumbnail_regen(session, base_url)
+        print("Triggered Immich thumbnail generation. After it finishes, run: "
+              "retry --status no_preview && run --type <photo|video>.")
     return ids
 
 
@@ -724,7 +737,9 @@ def main(argv=None) -> None:
     )
 
     # --- report ---
-    sub.add_parser("report", help="List assets missing a preview + remediation.")
+    report_p = sub.add_parser("report", help="List assets missing a preview + remediation.")
+    report_p.add_argument("--auto-regenerate", action="store_true",
+                          help="Trigger Immich thumbnail regeneration for missing assets")
 
     # --- retry ---
     retry_p = sub.add_parser("retry", help="Re-queue no_preview/error assets to pending.")
@@ -789,7 +804,8 @@ def main(argv=None) -> None:
             sys.exit(0 if hits else 2)
 
         elif args.command == "report":
-            ids = report(conn)
+            ids = report(conn, auto_regenerate=args.auto_regenerate,
+                         session=_lazy_session() if args.auto_regenerate else None)
             sys.exit(0 if ids else 2)
 
         elif args.command == "retry":

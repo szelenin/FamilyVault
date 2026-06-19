@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
+# =============================================================================
+# FamilyVault Understanding Layer — setup.sh
+# =============================================================================
+#
+# Installs Python dependencies and (optionally) pulls Ollama/MLX models needed
+# for the understanding-layer indexer.
+#
+# Usage:
+#   bash setup/understanding/setup.sh [--type photo|video|all]
+#
+# Operator Workflow:
+#   1. bash setup/understanding/setup.sh --type photo|video|all   # install deps
+#   2. python3.13 setup/understanding/index_cli.py doctor --type photo   # readiness check
+#   3. python3.13 setup/understanding/index_cli.py run --type photo [--limit N]  # index
+#   4. python3.13 setup/understanding/index_cli.py status          # counts
+#   5. python3.13 setup/understanding/index_cli.py report [--auto-regenerate]   # missing previews
+#   6. python3.13 setup/understanding/index_cli.py retry --status no_preview|error  # re-queue
+#   7. python3.13 setup/understanding/index_cli.py search "<query>"  # find
+# =============================================================================
+#
 # Idempotent setup for the understanding-layer indexer (IMP-018).
 # Pulls the local models and installs Python/system deps. Safe to re-run.
-#
-#   bash setup/understanding/setup.sh [--type photo|video|all]
 #
 # Photo-only runs do NOT need MLX/ffmpeg/scenedetect, so --type photo skips them.
 # See setup/local-agent/SETUP-NOTES.md for the python3.13 + Ollama-runner gotchas.
@@ -51,3 +69,12 @@ say "Index dirs"
 mkdir -p "$(dirname "$INDEX_DB")" "$STAGING_DIR" "$INDEX_BACKUP_DIR"
 
 say "Setup complete (type=$TYPE). Next: $PYTHON setup/understanding/index_cli.py status"
+
+echo ""
+echo "=== Setup complete. Operator workflow ==="
+echo "  1. index_cli.py doctor --type photo|video   # readiness"
+echo "  2. index_cli.py run --type photo|video       # index"
+echo "  3. index_cli.py status                       # counts"
+echo "  4. index_cli.py report [--auto-regenerate]   # missing previews"
+echo "  5. index_cli.py retry --status no_preview    # re-queue"
+echo "  6. index_cli.py search \"<query>\"             # find"
