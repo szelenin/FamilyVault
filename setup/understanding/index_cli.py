@@ -44,7 +44,7 @@ from index.db import (
     upsert_asset,
     upsert_segments,
 )
-from preflight import run_doctor, doctor_ok
+from preflight import run_doctor
 from index.status import Status
 from fetch.immich import (
     asset_filter_fields,
@@ -583,6 +583,24 @@ def retry(conn, statuses: list) -> int:
     return n
 
 
+def doctor_report(asset_type: str) -> int:
+    """Run readiness checks scoped to *asset_type* and print them.
+
+    Returns exit code 0 if all checks pass, else 3 (fail-fast remediation).
+    """
+    checks = run_doctor(asset_type)
+    for c in checks:
+        mark = "OK  " if c.ok else "FAIL"
+        line = f"[{mark}] {c.name}"
+        if not c.ok and c.fix:
+            line += f"  -> {c.fix}"
+        print(line)
+    if all(c.ok for c in checks):
+        return 0
+    print("\nReadiness check failed. Fix the items above and re-run.", file=sys.stderr)
+    return 3
+
+
 # ---------------------------------------------------------------------------
 # status
 # ---------------------------------------------------------------------------
@@ -750,6 +768,16 @@ def main(argv=None) -> None:
         help="Status to re-queue (repeatable). Default: both.",
     )
 
+    # --- doctor ---
+    doctor_p = sub.add_parser("doctor", help="Check environment readiness (scoped by --type).")
+    doctor_p.add_argument(
+        "--type",
+        dest="asset_type",
+        choices=["photo", "video", "all"],
+        default="all",
+        help="Scope the readiness checks (default: all).",
+    )
+
     args = parser.parse_args(argv)
 
     # Open DB
@@ -812,6 +840,9 @@ def main(argv=None) -> None:
             statuses = args.status or ["no_preview", "error"]
             retry(conn, statuses)
             sys.exit(0)
+
+        elif args.command == "doctor":
+            sys.exit(doctor_report(args.asset_type))
 
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

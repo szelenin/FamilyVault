@@ -116,14 +116,14 @@
 
 ### Tests (write first, confirm failing)
 
-- [ ] T035 [P] [US4] Failing unit tests for the preflight in `tests/understanding/unit/test_doctor.py` (pass/fail + exact-fix messages on a mocked env; **scoped per `--type`** — photo run does not require MLX/ffmpeg/scenedetect)
-- [ ] T036 [P] [US4] Failing unit tests for `report` + `retry` in `tests/understanding/unit/test_report_retry.py` (`report` lists `no_preview` IDs + Immich regeneration call; `retry --status no_preview|error` sets those back to `pending`)
+- [x] T035 [P] [US4] Failing unit tests for the preflight in `tests/understanding/unit/test_doctor.py` (pass/fail + exact-fix messages on a mocked env; **scoped per `--type`** — photo run does not require MLX/ffmpeg/scenedetect)
+- [x] T036 [P] [US4] Failing unit tests for `report` + `retry` in `tests/understanding/unit/test_report_retry.py` (`report` lists `no_preview` IDs + Immich regeneration call; `retry --status no_preview|error` sets those back to `pending`)
 
 ### Implementation
 
-- [ ] T037 [US4] Implement `setup/understanding/preflight.py` `doctor` (scoped presence-on-disk checks; fail-fast remediation messages) to pass T035
-- [ ] T038 [US4] Wire `doctor` to auto-run at the start of `run`; implement `index_cli.py` `report` + `retry` commands, to pass T036
-- [ ] T039 [US4] Finalize `setup.sh` (full deps + documentation); add optional `--auto-regenerate` flag to trigger Immich preview regeneration and re-fetch
+- [x] T037 [US4] Implement `setup/understanding/preflight.py` `doctor` (scoped presence-on-disk checks; fail-fast remediation messages) to pass T035
+- [x] T038 [US4] Wire `doctor` to auto-run at the start of `run`; implement `index_cli.py` `report` + `retry` commands, to pass T036
+- [x] T039 [US4] Finalize `setup.sh` (full deps + documentation); add optional `--auto-regenerate` flag to trigger Immich preview regeneration and re-fetch
 
 **Checkpoint**: US4 independently testable (readiness + remediation).
 

@@ -85,3 +85,20 @@ def test_report_autoregen_skipped_when_no_missing(tmp_path):
     s = MagicMock()
     assert index_cli.report(conn, auto_regenerate=True, session=s) == []
     s.put.assert_not_called()    # nothing to regenerate
+
+
+def test_doctor_command_exits_3_on_failure(tmp_path, monkeypatch):
+    from preflight import Check
+    monkeypatch.setattr(index_cli, "run_doctor",
+                        lambda t, **k: [Check("immich", True, ""), Check("ollama", False, "ollama serve")])
+    with pytest.raises(SystemExit) as e:
+        index_cli.main(["--db", str(tmp_path / "d.db"), "doctor", "--type", "photo"])
+    assert e.value.code == 3
+
+
+def test_doctor_command_exits_0_when_all_ok(tmp_path, monkeypatch):
+    from preflight import Check
+    monkeypatch.setattr(index_cli, "run_doctor", lambda t, **k: [Check("immich", True, "")])
+    with pytest.raises(SystemExit) as e:
+        index_cli.main(["--db", str(tmp_path / "d.db"), "doctor"])   # default --type all
+    assert e.value.code == 0
