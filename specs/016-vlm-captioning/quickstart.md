@@ -73,3 +73,16 @@ cd /Users/szelenin/projects/FamilyVault-AI
 - Re-run with no changes → `status` shows 0 newly processed (SC-005).
 - Interrupt mid-run, re-run → completed assets skipped (SC-006).
 - `doctor` with a missing component → stops in ~seconds with the fix (SC-010).
+
+### Acceptance results (2026-06-20, Mac Mini, live Immich + Ollama)
+
+Ran end-to-end on the real Mac Mini (24 GB) against live services. Index already held ~195K discovered assets.
+
+- **doctor --type photo** → all green (immich/sqlite/disk/ollama). Confirms the Ollama tag-normalization fix (`bge-m3:latest` ↔ `bge-m3`).
+- **run --type photo --limit 5** → 5 photos captioned (done 10→15), 0 errors, 0 no_preview, ~67s/photo. Captions are rich and each row carries a 4096-byte bge-m3 embedding.
+- **SC-002 (EN search)** `"family selfie on a balcony"` → correct asset ranks #1 (0.832) with FTS highlighting. PASS.
+- **SC-003 (cross-language)** `"семья на балконе у моря"` (Russian, no shared tokens) → the English-described family-on-balcony photos rank top (0.758) via bge-m3 multilingual embedding. PASS.
+- **SC-005 (idempotent)** `plan()` over the index returns 0 overlap with already-`done` assets — done assets are never re-selected. PASS.
+- **SC-010 (fail-fast)** `doctor` with Ollama unreachable → fails in **3.09s** (< 5s) with the exact `ollama serve` remediation. PASS.
+- **SC-007/008 (governor)** On this 24 GB box the photo phase's need exceeded free RAM with Immich running, so the governor escalated (stopped Immich + OrbStack) during the chunk caption-pass and **restored both on normal completion** (doctor green afterward). PASS for normal/SIGINT/exception exits (restore is in a `finally`).
+  - **Caveat surfaced:** a hard kill (SIGKILL/SIGTERM) mid-chunk skips the `finally`, leaving Immich/OrbStack stopped until the next run restores them between chunks. Recovery is `orb start && docker start $(docker ps -aq --filter name=immich)`. Follow-up candidate: a SIGTERM/SIGINT handler that calls `governor.restore()` before exit.

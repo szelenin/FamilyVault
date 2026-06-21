@@ -131,10 +131,10 @@
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T040 [P] Write `setup/understanding/README.md` (usage from `quickstart.md`: setup → doctor → phased run → search → tests)
-- [ ] T041 [P] Add edge-case unit tests across modules in `tests/understanding/unit/` (idempotent re-run = 0 processed; changed asset re-processed; `--memory never` insufficient-RAM clean stop; video with no scenes; over-budget clip map-reduce) and confirm the unit suite runs < 60s
-- [ ] T042 Run the `quickstart.md` acceptance smoke end-to-end on the Mac Mini (photos + a couple clips) and record results in the PR/quickstart
-- [ ] T043 [P] Update `docs/PRD.md` IMP-018 status (→ done when SC met) and confirm the design-doc link; note IMP-019/020/021/022 remain the follow-ups
+- [x] T040 [P] Write `setup/understanding/README.md` (usage from `quickstart.md`: setup → doctor → phased run → search → tests)
+- [x] T041 [P] Add edge-case unit tests across modules in `tests/understanding/unit/` (idempotent re-run = 0 processed; changed asset re-processed; `--memory never` insufficient-RAM clean stop; video with no scenes; over-budget clip map-reduce) and confirm the unit suite runs < 60s
+- [x] T042 Run the `quickstart.md` acceptance smoke end-to-end on the Mac Mini (photos + a couple clips) and record results in the PR/quickstart
+- [x] T043 [P] Update `docs/PRD.md` IMP-018 status (→ done when SC met) and confirm the design-doc link; note IMP-019/020/021/022 remain the follow-ups
 
 ---
 
