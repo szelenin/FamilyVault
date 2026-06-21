@@ -254,6 +254,66 @@ class TestMapReduce:
 # OCR dedupe across the whole clip
 # ---------------------------------------------------------------------------
 
+class TestMapReduceBudgetBound:
+    """Case 5 (T041): with frames > budget the captioner uses map-reduce and
+    the number of backend calls is bounded by ceil(n / budget) + 1 reduce call.
+
+    The budget is the frame_budget constructor parameter (FRAME_BUDGET by default).
+    Frames are split into windows of <= frame_budget; each window is one MAP call.
+    After all windows a REDUCE call follows (one extra call with empty paths).
+    Total backend calls == n_windows + 1 (reduce) <= ceil(n/budget) + 1.
+    """
+
+    def _count_map_calls(self, backend_calls):
+        """Map calls are those with non-empty frame_paths (reduce has empty [])."""
+        return sum(1 for c in backend_calls if c["frame_paths"])
+
+    def test_map_calls_bounded_by_ceil_n_over_budget(self):
+        """Number of map (non-reduce) backend calls == ceil(n / budget)."""
+        import math
+        budget = 4
+        n = 10  # ceil(10/4) = 3 windows
+        backend = _make_scene_backend()
+        cap = VideoMLXCaptioner(backend=backend, frame_budget=budget)
+        cap.caption(_frames(n), is_video=True, frame_times=[float(i) for i in range(n)])
+        expected_windows = math.ceil(n / budget)
+        map_calls = self._count_map_calls(backend.calls)
+        assert map_calls == expected_windows, (
+            f"Expected {expected_windows} map calls for n={n}, budget={budget}; "
+            f"got {map_calls} (total calls={len(backend.calls)})"
+        )
+
+    def test_exactly_at_budget_is_single_map_call(self):
+        """n == budget → exactly ONE map call (no map-reduce split)."""
+        budget = 4
+        n = budget
+        backend = _make_scene_backend()
+        cap = VideoMLXCaptioner(backend=backend, frame_budget=budget)
+        cap.caption(_frames(n), is_video=True, frame_times=[float(i) for i in range(n)])
+        map_calls = self._count_map_calls(backend.calls)
+        assert map_calls == 1
+
+    def test_one_over_budget_triggers_two_map_calls(self):
+        """n == budget+1 → two map calls and a reduce call."""
+        budget = 4
+        n = budget + 1
+        backend = _make_scene_backend()
+        cap = VideoMLXCaptioner(backend=backend, frame_budget=budget)
+        cap.caption(_frames(n), is_video=True, frame_times=[float(i) for i in range(n)])
+        map_calls = self._count_map_calls(backend.calls)
+        assert map_calls == 2
+
+    def test_total_frames_across_windows_equals_n(self):
+        """Sum of frames across all map windows equals n (no frame dropped or doubled)."""
+        budget = 4
+        n = 11
+        backend = _make_scene_backend()
+        cap = VideoMLXCaptioner(backend=backend, frame_budget=budget)
+        cap.caption(_frames(n), is_video=True, frame_times=[float(i) for i in range(n)])
+        total = sum(len(c["frame_paths"]) for c in backend.calls if c["frame_paths"])
+        assert total == n
+
+
 class TestOcrDedup:
     def test_duplicate_ocr_across_frames_appears_once(self):
         # Same on-screen text repeated across frames -> once in top-level ocr_text

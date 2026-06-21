@@ -641,6 +641,72 @@ def test_index_state_none_source_hash(tmp_path):
     conn.close()
 
 
+# ---------------------------------------------------------------------------
+# T041 edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotentRerun:
+    """Case 1: after all assets are done+current, plan returns []."""
+
+    def test_all_done_and_current_returns_empty_plan(self, tmp_path):
+        """After every asset is status='done' with current schema_ver, plan() == []."""
+        conn = open_db(tmp_path / "test.db")
+        for i in range(5):
+            upsert_asset(conn, _make_asset(
+                f"a{i}", status="done", source_hash=f"hash{i}", schema_ver=SCHEMA_VER
+            ))
+        result = plan(conn, type=None, schema_ver=SCHEMA_VER)
+        assert result == [], f"Expected empty plan but got: {result}"
+        conn.close()
+
+    def test_mixed_done_and_pending_only_selects_pending(self, tmp_path):
+        """plan() selects only the pending asset out of a mix of done+pending."""
+        conn = open_db(tmp_path / "test.db")
+        for i in range(4):
+            upsert_asset(conn, _make_asset(
+                f"done-{i}", status="done", source_hash=f"h{i}", schema_ver=SCHEMA_VER
+            ))
+        upsert_asset(conn, _make_asset(
+            "changed-1", status="pending", source_hash="new-hash", schema_ver=SCHEMA_VER
+        ))
+        result = plan(conn, type=None, schema_ver=SCHEMA_VER)
+        ids = [r["asset_id"] for r in result]
+        assert ids == ["changed-1"]
+        conn.close()
+
+
+class TestChangedAssetReprocessed:
+    """Case 2: asset with changed source_hash (reset to pending) is re-selected."""
+
+    def test_only_changed_asset_returned(self, tmp_path):
+        """Exactly the asset whose source_hash changed (reset to pending) is returned."""
+        conn = open_db(tmp_path / "test.db")
+        # Three done assets, all at current schema
+        for i in range(3):
+            upsert_asset(conn, _make_asset(
+                f"a{i}", status="done", source_hash=f"hash{i}", schema_ver=SCHEMA_VER
+            ))
+        # Simulate file change: reconciler detects new hash, resets to pending
+        upsert_asset(conn, _make_asset(
+            "a1", status="pending", source_hash="hash1-UPDATED", schema_ver=SCHEMA_VER
+        ))
+        result = plan(conn, type=None, schema_ver=SCHEMA_VER)
+        ids = {r["asset_id"] for r in result}
+        assert ids == {"a1"}, f"Expected only a1, got: {ids}"
+        conn.close()
+
+    def test_done_asset_with_same_hash_not_returned(self, tmp_path):
+        """Done asset whose source_hash hasn't changed is NOT in plan output."""
+        conn = open_db(tmp_path / "test.db")
+        upsert_asset(conn, _make_asset(
+            "stable", status="done", source_hash="stable-hash", schema_ver=SCHEMA_VER
+        ))
+        result = plan(conn, type=None, schema_ver=SCHEMA_VER)
+        assert result == []
+        conn.close()
+
+
 def test_backup_copy_is_readable(tmp_path):
     """The backup copy must open and contain the original rows."""
     conn = open_db(tmp_path / "source.db")

@@ -335,6 +335,27 @@ class TestDefaultServiceCommands:
         assert seen["cmd"] == ["orb", "start"]
 
 
+class TestNeverPolicyNoServiceStop:
+    """Case 3 (T041): policy='never' — InsufficientMemoryError is raised AND
+    zero service-stop/start events are recorded (not merely 'not in names()')."""
+
+    def test_insufficient_ram_raises_and_zero_service_events(self):
+        """Raises InsufficientMemoryError; recorder shows NO stop/start events."""
+        gov, rec = make_governor([8.0, 9.0], loaded=["qwen3-vl:8b", "extra:latest"])
+        with pytest.raises(InsufficientMemoryError):
+            gov.free_for_phase(PHOTO, policy="never", need_gb=16.0)
+        service_events = [e for e in rec.events if e[0] in
+                          {"stop_immich", "start_immich", "stop_orbstack", "start_orbstack"}]
+        assert service_events == [], f"Expected zero service events, got: {service_events}"
+
+    def test_no_loaded_models_raises_and_zero_service_events(self):
+        """No models to unload + still low memory → raises, no service stop."""
+        gov, rec = make_governor([4.0, 4.0], loaded=[])
+        with pytest.raises(InsufficientMemoryError):
+            gov.free_for_phase(PHOTO, policy="never", need_gb=16.0)
+        assert sum(1 for e in rec.events if e[0].startswith("stop_")) == 0
+
+
 class TestEscalationFailureRestores:
     def test_auto_restores_immich_when_orbstack_stop_fails(self):
         import pytest

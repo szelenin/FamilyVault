@@ -172,3 +172,25 @@ class TestCaptionerProtocol:
             else:
                 # Minimal: just confirm it's a type/protocol
                 assert isinstance(Captioner, type) or hasattr(Captioner, "__mro__")
+
+
+class TestModelPresent:
+    def test_bare_name_matches_tagged_install(self):
+        from caption.base import model_present
+        assert model_present("bge-m3", ["bge-m3:latest", "qwen3:14b"]) is True
+
+    def test_exact_tagged_match(self):
+        from caption.base import model_present
+        assert model_present("qwen3-vl:8b", ["qwen3-vl:8b"]) is True
+
+    def test_tagged_requirement_mismatch_is_false(self):
+        from caption.base import model_present
+        assert model_present("qwen3-vl:8b", ["qwen3-vl:4b"]) is False
+
+    def test_absent_is_false(self):
+        from caption.base import model_present
+        assert model_present("bge-m3", ["qwen3:14b"]) is False
+
+    def test_exact_bare_match(self):
+        from caption.base import model_present
+        assert model_present("bge-m3", ["bge-m3"]) is True
