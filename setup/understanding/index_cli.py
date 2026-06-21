@@ -81,6 +81,30 @@ PHOTO_NEED_GB = float(os.environ.get("PHOTO_NEED_GB", "9"))
 VIDEO_NEED_GB = float(os.environ.get("VIDEO_NEED_GB", "12"))
 
 
+def _install_termination_handler(*, signal_mod=None) -> None:
+    """Convert SIGTERM into a KeyboardInterrupt so a graceful kill unwinds the
+    stack and the run's per-chunk `finally` blocks run (most importantly the
+    governor's restore of Immich/OrbStack).
+
+    SIGINT (Ctrl-C) already raises KeyboardInterrupt by default, so it is left
+    untouched; only SIGTERM needs converting. A hard SIGKILL cannot be trapped
+    and is therefore still unrecoverable — the stack is restored on the next run
+    between chunks. Installation is best-effort: signal handlers can only be set
+    from the main thread, so a ValueError (e.g. running off-thread) is ignored.
+    """
+    if signal_mod is None:
+        import signal as signal_mod  # lazy: avoid importing at module load
+
+    def _handler(signum, frame):  # noqa: ARG001 (signature fixed by signal API)
+        raise KeyboardInterrupt()
+
+    try:
+        signal_mod.signal(signal_mod.SIGTERM, _handler)
+    except ValueError:
+        # Not in the main thread; SIGTERM conversion unavailable. Non-fatal.
+        pass
+
+
 # Canonical key-file path provisioned by setup/immich/scripts/provision-api-key.sh
 # (also used by setup/story-engine). The CLI reads the key from here when the
 # IMMICH_API_KEY env var is not set, so no manual `export` is required.
@@ -798,6 +822,9 @@ def main(argv=None) -> None:
                 for c in failed:
                     print(f"  [{c.name}] {c.fix}", file=sys.stderr)
                 sys.exit(3)
+            # Convert SIGTERM → KeyboardInterrupt so a graceful kill unwinds the
+            # stack and the governor restores Immich/OrbStack via its `finally`.
+            _install_termination_handler()
             run_fn = run_photos if args.asset_type == "photo" else run_videos
             result = run_fn(
                 conn,
@@ -844,6 +871,11 @@ def main(argv=None) -> None:
         elif args.command == "doctor":
             sys.exit(doctor_report(args.asset_type))
 
+    except KeyboardInterrupt:
+        # SIGINT/SIGTERM during a run: the per-chunk `finally` has already
+        # restored the governor (Immich/OrbStack). Exit cleanly, no traceback.
+        print("Interrupted — services restored; re-run to resume.", file=sys.stderr)
+        sys.exit(130)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(3)
