@@ -154,6 +154,8 @@ Ready-to-run scripts are in the `/scripts` folder. Use them directly or adapt as
 - project.json — video trim settings (`trim_start`, `trim_end` per asset), deselect from timeline (012-clip-editing)
 - Bash 3.2+ (macOS default; works without bash 4 features), Python 3.13 (already installed on Mac Mini for osxphotos) + osxphotos 0.75.6 (Python), exiftool 13.55 (CLI), bats-core 1.10+ (already used in project per `002-immich-setup`) (014-sync-metadata-flags)
 - Files on `/Volumes/HomeRAID/icloud-export/`; SQLite for tracking (`.osxphotos_export.db`, Photos.sqlite — read-only) (014-sync-metadata-flags)
+- Python 3.13 (`/opt/homebrew/bin/python3.13` on the Mac Mini — default `python3` is broken; see `setup/local-agent/SETUP-NOTES.md`) + Ollama (`qwen3-vl:8b`, `bge-m3`); MLX-VLM (`mlx-community/Qwen3-VL-8B-Instruct-4bit`); FFmpeg; PySceneDetect; `openai` SDK (Ollama OpenAI-compatible endpoint); `requests` (Immich); `psutil` (memory); stdlib `sqlite3` (FTS5 + vectors) (016-vlm-captioning)
+- SQLite on native SSD (WAL mode) at `~/.familyvault/index/familyvault.db` (configurable); backup copy to `/Volumes/HomeRAID`; bounded staging dir on SSD (`STAGING_BUDGET` default 10 GB) (016-vlm-captioning)
 
 ## Recent Changes
 - 012-clip-editing: Full-screen preview, video trim with filmstrip handles, deselect items in timeline expanded view.

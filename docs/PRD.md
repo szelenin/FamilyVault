@@ -381,7 +381,9 @@ Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocat
 
 **Approach**: VLM captioning per the model spec — **Qwen3-VL 8B (Instruct)** default (~6 GB, Ollama), Qwen2.5-VL 7B / InternVL3 8B as A/B fallbacks. Combines two requested signals: keyframe captioning **and** OCR (the VLM reads text natively — no separate OCR model). **Identity stays with Immich** — the VLM describes "a boy"; Immich knows it's your son (resolve "who" via Immich person IDs; never re-identify with the VLM).
 
-**Technical design**: `docs/superpowers/specs/2026-06-13-imp-018-vlm-captioning-design.md` (photos→Ollama, video→MLX-VLM, SQLite hybrid index with caption embeddings; photos-first phasing; chunked low-mem batch).
+**Technical design**: `docs/superpowers/specs/2026-06-13-imp-018-vlm-captioning-design.md` (photos→Ollama, video→MLX-VLM, SQLite hybrid index with caption embeddings; photos-first phasing; chunked low-mem batch). Follow-on designs: `docs/superpowers/specs/2026-06-14-imp-018-error-remediation-ladder-design.md` (error codes + remediation), `docs/superpowers/specs/2026-06-16-imp-018-incremental-discovery-design.md` (watermark delta scan).
+
+**Status**: DONE (branch `016-vlm-captioning`) — implementation complete and smoke-verified end-to-end on the Mac Mini against live Immich + Ollama. Operator guide: `setup/understanding/README.md`; usage/acceptance: `specs/016-vlm-captioning/quickstart.md`. Verified: photo captioning + OCR + bge-m3 embeddings (SC-001/002), cross-language semantic search (SC-003), video segments (SC-004), idempotent re-run / done-asset skip (SC-005/006), memory governor frees+restores Immich/OrbStack on normal completion, exceptions, and SIGINT/SIGTERM (SC-007/008), staging budget (SC-009), `doctor` fail-fast <5s with exact remediation (SC-010), no-preview report/retry (SC-011). Unit+e2e suite: 322 passing in <1s. Captioning the full ~195K-asset library is an ongoing scheduled/incremental batch (R100), not an eager one-shot. Known caveat: only a hard `kill -9` (SIGKILL) mid-chunk is unrecoverable — it cannot be trapped, so the stack stays stopped until the next run restores it between chunks; SIGTERM is converted to a clean unwind so the governor's `finally` restore runs. Follow-ups remain: IMP-019 (audio), IMP-020 (signal fusion / multilingual ranking), IMP-021 (photo quality), IMP-022 (face-frame quality).
 
 **Error-handling design**: `docs/superpowers/specs/2026-06-14-imp-018-error-remediation-ladder-design.md` (typed error codes from `finish_reason`, raw reason persisted for audit, static per-code remediation ladder, operator/AI-driven `remediate` pass). Reference implementation + real-run problem context (US1 photos baseline; empty captions on text-heavy images): [PR #3](https://github.com/szelenin/FamilyVault/pull/3).
 
@@ -464,7 +466,7 @@ Immich already provides faces/identity, CLIP semantic search, EXIF, and geolocat
 | — | **IMP-015**: Local LLM Agent | Phase 1 DONE | Independent track. Custom loop works e2e |
 | — | **IMP-016**: Assembler v2 — Runtime Wiring & E2E | Not started | HIGH — wire v2 builder into runtime; verify MP4 from v2 project.json. Unblocks IMP-015 R085 |
 | — | **IMP-017**: Local Agent — Goose Runtime | Parked / next | LOW — alternate runtime; custom loop already works |
-| — | **IMP-018**: VLM Captioning & Extraction (+OCR) | Not started | HIGH — content understanding (Qwen3-VL 8B). v1 of understanding layer |
+| ✅ | **IMP-018**: VLM Captioning & Extraction (+OCR) | Done (smoke-verified, 016-vlm-captioning) | HIGH — content understanding (Qwen3-VL 8B). v1 of understanding layer |
 | — | **IMP-019**: Audio Understanding (Whisper + CLAP) | Not started | HIGH — speech + sound events; "required" for activity search |
 | — | **IMP-020**: Signal Fusion & Multilingual Search | Not started | MEDIUM — ties 018/019 together; multilingual CLIP swap |
 | — | **IMP-021**: Photo Quality Scoring | Not started | MEDIUM — blur/exposure/composition/aesthetic |
